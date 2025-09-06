@@ -16,4 +16,5 @@ reportlab==3.6.12
 textblob==0.17.1
 werkzeug==2.2.3
 firebase-admin==6.1.0
-feedparser==6.0.10 
+feedparser==6.0.10
+psutil==6.0.0 

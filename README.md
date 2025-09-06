@@ -31,6 +31,7 @@
 
 ### 🔍 **AI-Powered Damage Detection**
 - **DamageNet CNN Model**: Custom-trained neural network using EfficientNet-B4 backbone
+- **Smart Memory Management**: Lazy loading, automatic cleanup, and memory optimization
 - **Multi-Modal Analysis**: Combines computer vision with structural engineering principles
 - **Severity Scoring**: Continuous damage severity assessment (0.0 - 1.0 scale)
 - **Damage Classification**: Identifies specific damage types (structural, fire, flood, earthquake, etc.)
@@ -168,7 +169,16 @@ expo start --android # Android Emulator
 #### Backend (.env)
 ```bash
 # Database (MongoDB Atlas Cloud)
-MONGODB_URI=
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
+
+# Server Configuration
+SERVER_HOST=0.0.0.0
+SERVER_PORT=5000
+
+# AI Model Configuration
+MODEL_PATH=damagenet_json_best.pth
+MEMORY_THRESHOLD_PERCENT=80
+MODEL_IDLE_TIME=300
 
 # Security
 JWT_SECRET_KEY=your-super-secure-jwt-secret-key
@@ -181,22 +191,26 @@ FIREBASE_CONFIG={"your": "firebase-config"}
 FLASK_ENV=production
 ```
 
-#### Frontend (config/env.js)
-```javascript
-export default {
-  API_BASE_URL: 'http://your-backend-url:5000',
-  API_TIMEOUT: 60000,
-  DEBUG_MODE: __DEV__,
-  
-  // Map configuration
-  GOOGLE_MAPS_API_KEY: 'your-google-maps-key',
-  
-  // Firebase configuration
-  FIREBASE_CONFIG: {
-    // Your Firebase config
-  }
-};
+#### Frontend (.env - Expo environment variables)
+```bash
+# Backend API Configuration
+EXPO_PUBLIC_API_BASE_URL=http://your-backend-ip:5000
+EXPO_PUBLIC_API_BACKUP_URL=http://10.0.2.2:5000
+EXPO_PUBLIC_API_TIMEOUT=60000
+
+# Firebase Configuration (Optional)
+EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+
+# Maps Configuration (Optional)
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+
+# Debug Configuration
+EXPO_PUBLIC_DEBUG_MODE=true
 ```
+
+**Note**: Create a `.env` file in the `dasper/` directory with your actual values.
 
 ## 📖 Usage Guide
 
@@ -280,6 +294,14 @@ POST /api/reports/generate
 |----------|--------|-------------|---------------|
 | `/api/reports/generate` | POST | Generate PDF report | ✅ |
 | `/api/reports/download/{id}` | GET | Download PDF report | ✅ |
+
+### Model Management
+
+| Endpoint | Method | Description | Auth Required |
+|----------|--------|-------------|---------------|
+| `/api/model/status` | GET | Get model manager status | ✅ |
+| `/api/model/preload` | POST | Manually preload AI models | ✅ |
+| `/api/model/unload` | POST | Unload models to free memory | ✅ |
 
 ## 🧪 Development
 
