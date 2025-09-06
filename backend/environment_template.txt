@@ -1,0 +1,48 @@
+# DASPER Backend Environment Configuration
+# Copy this content to a new file named ".env" in the backend folder
+
+# MongoDB Configuration
+MONGO_URI=mongodb://localhost:27017/dasper
+
+# OpenWeatherMap API Key (Required for weather alerts)
+# Get your free API key from: https://openweathermap.org/api
+# Free tier: 1,000 calls/day, 60 calls/minute
+OPENWEATHER_API_KEY=your_openweather_api_key_here
+
+# JWT Secret Key (Required for authentication)
+JWT_SECRET_KEY=your_jwt_secret_key_here
+
+# Firebase Admin SDK (Optional - for Firebase auth integration)
+# FIREBASE_CREDENTIALS_PATH=path/to/your/firebase-credentials.json
+
+# Other External API Keys (Optional)
+# Add more external APIs as needed
+
+# Production Configuration
+# Flask Environment
+FLASK_ENV=production
+
+# Security Settings
+# CORS_ORIGINS=https://yourdomain.com,https://yourapp.com
+
+# Email Configuration (Optional - for notifications)
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
+# SMTP_USERNAME=your_email@gmail.com
+# SMTP_PASSWORD=your_email_password
+
+# External APIs Status
+# The following APIs are currently integrated:
+# 
+# ✅ FREE APIs (No keys required):
+# - USGS Earthquakes: https://earthquake.usgs.gov/earthquakes/feed/
+# - NASA EONET: https://eonet.gsfc.nasa.gov/api/
+# - GDACS: https://www.gdacs.org/xml/rss.xml
+#
+# 🔑 APIs requiring keys:
+# - OpenWeatherMap: Weather alerts (FREE tier available)
+#
+# 📝 To add more APIs:
+# 1. Add your API key here
+# 2. Implement fetch function in app.py
+# 3. Add to fetch_and_store_live_alerts() function
