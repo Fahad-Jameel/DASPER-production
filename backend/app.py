@@ -94,11 +94,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize global variables
-pipeline = None
-cost_estimator = None
-area_estimator = None
 mongo_client = None
 db = None
+
+# Import model manager for improved memory management
+from model_manager import get_model_manager, shutdown_model_manager
+
+# Global model manager instance
+model_manager = None
 
 # Initialize Firebase Admin (optional)
 try:
@@ -243,57 +246,30 @@ def init_gemini():
         return False
 
 # [Previous pipeline initialization code remains the same]
-def create_enhanced_pipeline(checkpoint=None):
-    """Create an enhanced pipeline using the DamageAssessmentPipeline
+def init_model_manager():
+    """Initialize model manager with lazy loading and memory optimization"""
+    global model_manager
     
-    Args:
-        checkpoint: Optional model checkpoint, if not provided the default model will be loaded
-    
-    Returns:
-        DamageAssessmentPipeline instance
-    """
     try:
-        # Looking at inference.py, DamageAssessmentPipeline expects model_path, not checkpoint
-        model_path = 'damagenet_json_best.pth'
+        # Get model path from environment or use default
+        model_path = os.getenv('MODEL_PATH', 'damagenet_json_best.pth')
+        
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model file not found at {model_path}")
-            
-        # Create the pipeline with the model path
-        pipeline = DamageAssessmentPipeline(model_path=model_path)
-            
-        logger.info("✅ Created enhanced damage assessment pipeline")
-        return pipeline
-    except Exception as e:
-        logger.error(f"❌ Failed to create pipeline: {e}")
-        raise e
-
-def init_pipeline():
-    """Initialize damage assessment pipeline with area estimation"""
-    global pipeline, cost_estimator, area_estimator
-    
-    model_path = 'damagenet_json_best.pth'
-    
-    if not os.path.exists(model_path):
-        logger.error(f"❌ Model file not found: {model_path}")
-        return False
-    
-    try:
-        # Create the pipeline directly
-        pipeline = create_enhanced_pipeline()
-        logger.info("✅ DamageNet pipeline loaded successfully")
+            logger.error(f"❌ Model file not found: {model_path}")
+            logger.info("💡 The model will be loaded on first assessment request")
+            return False
         
-        # Initialize enhanced cost estimator
-        cost_estimator = EnhancedRegionalCostEstimator(db)
-        logger.info("✅ Enhanced cost estimator initialized")
-        
-        # Initialize building area estimator
-        area_estimator = BuildingAreaEstimator()
-        logger.info("✅ Building area estimator initialized")
+        # Initialize model manager (models loaded lazily)
+        model_manager = get_model_manager()
+        logger.info("✅ Model manager initialized with lazy loading")
+        logger.info(f"   📁 Model path: {model_path}")
+        logger.info(f"   🧠 Models will be loaded on first use")
+        logger.info(f"   💾 Current RAM usage: {model_manager.get_status()['memory_usage']['current_percent']:.1f}%")
         
         return True
         
     except Exception as e:
-        logger.error(f"❌ Pipeline initialization failed: {e}")
+        logger.error(f"❌ Model manager initialization failed: {e}")
         return False
 
 def generate_enhanced_heatmap(image_path, assessment_result):
@@ -1050,15 +1026,16 @@ def get_alerts_status():
 @app.route('/api/assess', methods=['POST'])
 @jwt_required()
 def assess_damage():
-    """Enhanced endpoint for damage assessment with user authentication"""
+    """Enhanced endpoint for damage assessment with user authentication and memory optimization"""
     try:
-        logger.info("Assessment request received")
+        logger.info("🔍 Assessment request received")
         user_id = get_jwt_identity()
-        logger.info(f"User ID: {user_id}")
+        logger.info(f"👤 User ID: {user_id}")
         
-        if pipeline is None:
-            logger.error("Pipeline is None")
-            return jsonify({'error': 'Model not loaded. Please check model file.'}), 500
+        # Check model manager availability
+        if model_manager is None:
+            logger.error("❌ Model manager not initialized")
+            return jsonify({'error': 'Model manager not available. Please check server configuration.'}), 500
         
         # Get form data
         building_name = request.form.get('building_name', '')
@@ -1092,23 +1069,36 @@ def assess_damage():
         image = Image.open(image_path).convert('RGB')
         logger.info(f"Image loaded: {image.size}")
         
-        # Perform damage assessment
+        # Perform damage assessment with memory optimization
         try:
-            logger.info("Starting building area estimation")
-            # Estimate building area - pass PIL image object, not path
-            building_area_result = area_estimator.estimate_area(image, building_type, pin_location)
-            building_area = building_area_result['estimated_area_sqm']  # Extract the float value
-            logger.info(f"Building area estimated: {building_area} sqm")
+            logger.info("🧠 Starting AI-powered assessment with memory optimization")
             
-            logger.info("Starting damage assessment")
-            # Perform damage assessment and cost estimation
-            assessment_result = pipeline.assess_damage_and_cost(
-                image_path, 
-                building_area, 
-                building_type, 
-                pin_location
-            )
-            logger.info(f"Assessment result: {assessment_result}")
+            # Use model manager for memory-optimized inference
+            with model_manager.memory_optimized_inference():
+                with model_manager.get_pipeline() as models:
+                    pipeline = models['pipeline']
+                    cost_estimator = models['cost_estimator'] 
+                    area_estimator = models['area_estimator']
+                    
+                    logger.info("📐 Starting building area estimation")
+                    # Estimate building area - pass PIL image object, not path
+                    building_area_result = area_estimator.estimate_area(image, building_type, pin_location)
+                    building_area = building_area_result['estimated_area_sqm']  # Extract the float value
+                    logger.info(f"📏 Building area estimated: {building_area} sqm")
+                    
+                    logger.info("🔍 Starting damage assessment")
+                    # Perform damage assessment and cost estimation
+                    assessment_result = pipeline.assess_damage_and_cost(
+                        image_path, 
+                        building_area, 
+                        building_type, 
+                        pin_location
+                    )
+                    logger.info(f"✅ Assessment completed successfully")
+                    
+                    # Clean up image from memory immediately after processing
+                    image.close()
+                    del image
             
             logger.info("Generating heatmap")
             # Generate heatmap
@@ -1737,16 +1727,80 @@ def export_user_data():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+    """Enhanced health check endpoint with model manager status"""
+    model_status = {}
+    if model_manager:
+        model_status = model_manager.get_status()
+    
     return jsonify({
         'status': 'ok',
         'timestamp': datetime.utcnow().isoformat(),
         'mongodb': mongo_client is not None,
-        'model_loaded': pipeline is not None,
-        'upload_folder': os.path.exists(app.config['UPLOAD_FOLDER']),
-        'results_folder': os.path.exists(app.config['RESULTS_FOLDER']),
-        'reports_folder': os.path.exists(app.config['REPORTS_FOLDER'])
+        'model_manager': model_manager is not None,
+        'model_status': model_status,
+        'folders': {
+            'upload_folder': os.path.exists(app.config['UPLOAD_FOLDER']),
+            'results_folder': os.path.exists(app.config['RESULTS_FOLDER']),
+            'reports_folder': os.path.exists(app.config['REPORTS_FOLDER'])
+        }
     })
+
+@app.route('/api/model/status', methods=['GET'])
+@jwt_required()
+def get_model_status():
+    """Get detailed model manager status"""
+    try:
+        if model_manager is None:
+            return jsonify({'error': 'Model manager not available'}), 503
+        
+        status = model_manager.get_status()
+        return jsonify({
+            'success': True,
+            'data': status
+        })
+    except Exception as e:
+        logger.error(f"Model status error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/model/preload', methods=['POST'])
+@jwt_required()
+def preload_models():
+    """Manually preload models"""
+    try:
+        if model_manager is None:
+            return jsonify({'error': 'Model manager not available'}), 503
+        
+        logger.info("🚀 Manual model preload requested")
+        model_manager.preload_models()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Models preloaded successfully',
+            'status': model_manager.get_status()
+        })
+    except Exception as e:
+        logger.error(f"Model preload error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/model/unload', methods=['POST'])
+@jwt_required()
+def unload_models():
+    """Manually unload models to free memory"""
+    try:
+        if model_manager is None:
+            return jsonify({'error': 'Model manager not available'}), 503
+        
+        logger.info("🗑️ Manual model unload requested")
+        model_manager.force_unload()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Models unloaded successfully',
+            'status': model_manager.get_status()
+        })
+    except Exception as e:
+        logger.error(f"Model unload error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/regions', methods=['GET'])
 def get_regions():
@@ -1959,18 +2013,27 @@ if __name__ == '__main__':
     print("🚀 Starting Enhanced DASPER Backend...")
     
     # Initialize components
+    print("📊 Initializing database...")
     init_database()
+    
+    print("🤖 Initializing Gemini AI...")
     init_gemini()
     
-    if not init_pipeline():
-        print("❌ Failed to load model. Please check the model file and try again.")
-        print("Starting server anyway (endpoints will return errors)")
+    print("🧠 Initializing model manager with lazy loading...")
+    if not init_model_manager():
+        print("⚠️ Model manager initialization incomplete.")
+        print("💡 Models will be loaded on first assessment request.")
     
     print("✅ Server initialization complete!")
-    print("🌐 API endpoints available at: http://localhost:5000/api/")
-    print("📊 Health check: http://localhost:5000/api/health")
-    print("🔐 Authentication: http://localhost:5000/api/auth/")
-    print("🏗️ Assessment endpoint: http://localhost:5000/api/assess")
+    
+    # Get server configuration from environment
+    server_host = os.getenv('SERVER_HOST', '0.0.0.0')
+    server_port = int(os.getenv('SERVER_PORT', 5000))
+    
+    print(f"🌐 API endpoints available at: http://{server_host}:{server_port}/api/")
+    print(f"📊 Health check: http://{server_host}:{server_port}/api/health")
+    print(f"🔐 Authentication: http://{server_host}:{server_port}/api/auth/")
+    print(f"🏗️ Assessment endpoint: http://{server_host}:{server_port}/api/assess")
     
     # Initialize external disaster alerts
     try:
@@ -1980,4 +2043,14 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"⚠️ Initial alerts fetch failed: {e}")
     
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    try:
+        # Start the Flask application
+        app.run(debug=False, host=server_host, port=server_port)
+    except KeyboardInterrupt:
+        print("\n🛑 Server shutdown requested...")
+    finally:
+        # Graceful shutdown
+        print("🧹 Cleaning up resources...")
+        if model_manager:
+            shutdown_model_manager()
+        print("✅ Server shutdown complete!")
