@@ -10,6 +10,7 @@ backend/damagenet_json_best.pth
 dasper/node_modules/
 dasper/.env
 dasper/env.js
+dasper/config/env.js
 
 # General exclusions
 *.log
