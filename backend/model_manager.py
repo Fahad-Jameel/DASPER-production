@@ -14,6 +14,8 @@ from contextlib import contextmanager
 from inference import DamageAssessmentPipeline
 from enhanced_cost_estimation import EnhancedRegionalCostEstimator
 from building_area_estimator import BuildingAreaEstimator
+from enhanced_building_analyzer import EnhancedBuildingAnalyzer
+from volume_based_cost_estimation import VolumeBasedCostEstimator
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,8 @@ class ModelManager:
         self._pipeline = None
         self._cost_estimator = None
         self._area_estimator = None
+        self._building_analyzer = None
+        self._volume_cost_estimator = None
         
         # Model lifecycle tracking
         self._last_used = None
@@ -131,6 +135,14 @@ class ModelManager:
             logger.info("📐 Loading area estimator...")
             self._area_estimator = BuildingAreaEstimator()
             
+            # Load enhanced building analyzer (includes height estimation)
+            logger.info("🏗️ Loading enhanced building analyzer...")
+            self._building_analyzer = EnhancedBuildingAnalyzer()
+            
+            # Load volume-based cost estimator
+            logger.info("💰 Loading volume-based cost estimator...")
+            self._volume_cost_estimator = VolumeBasedCostEstimator()
+            
             # Calculate memory usage
             end_memory = psutil.virtual_memory().used
             self._model_size_estimate = end_memory - start_memory
@@ -160,6 +172,8 @@ class ModelManager:
             self._pipeline = None
             self._cost_estimator = None
             self._area_estimator = None
+            self._building_analyzer = None
+            self._volume_cost_estimator = None
             
             # Force garbage collection
             gc.collect()
@@ -199,7 +213,9 @@ class ModelManager:
                 yield {
                     'pipeline': self._pipeline,
                     'cost_estimator': self._cost_estimator,
-                    'area_estimator': self._area_estimator
+                    'area_estimator': self._area_estimator,
+                    'building_analyzer': self._building_analyzer,
+                    'volume_cost_estimator': self._volume_cost_estimator
                 }
                 
             except Exception as e:

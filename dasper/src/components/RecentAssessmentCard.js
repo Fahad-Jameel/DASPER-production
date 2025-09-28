@@ -121,6 +121,13 @@ const RecentAssessmentCard = ({ assessment, onPress, delay = 0 }) => {
               </Text>
               <Text style={styles.metricLabel}>Area</Text>
             </View>
+            
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>
+                {assessment?.building_height_m?.toFixed(1) || 0}m
+              </Text>
+              <Text style={styles.metricLabel}>Height</Text>
+            </View>
           </View>
 
           {/* Footer */}

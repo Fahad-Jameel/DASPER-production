@@ -12,6 +12,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
 import { Ionicons } from '@expo/vector-icons';
@@ -83,6 +84,46 @@ const AssessmentScreen = ({ navigation }) => {
     requestPermissions();
     getCurrentLocation();
   }, []);
+
+  // Reset form state when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Reset form data to initial state
+      setFormData({
+        buildingName: '',
+        buildingType: 'residential',
+        location: '',
+        coordinates: null,
+        damageTypes: [],
+        isPublic: false,
+      });
+      
+      // Clear selected image
+      setSelectedImage(null);
+      
+      // Clear errors
+      setErrors({});
+      
+      // Reset to current location if available
+      if (currentLocation) {
+        setMapRegion({
+          latitude: currentLocation.coords.latitude,
+          longitude: currentLocation.coords.longitude,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        });
+        
+        setFormData(prev => ({
+          ...prev,
+          coordinates: {
+            latitude: currentLocation.coords.latitude,
+            longitude: currentLocation.coords.longitude,
+          },
+          location: `${currentLocation.coords.latitude.toFixed(6)},${currentLocation.coords.longitude.toFixed(6)}`
+        }));
+      }
+    }, [currentLocation])
+  );
 
   const requestPermissions = async () => {
     // Request camera permission

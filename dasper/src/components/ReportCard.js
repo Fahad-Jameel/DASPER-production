@@ -152,6 +152,18 @@ const ReportCard = ({
           </View>
 
           <View style={styles.metric}>
+            <View style={[styles.metricIcon, { backgroundColor: `${colors.info}15` }]}>
+              <Ionicons name="resize" size={16} color={colors.info} />
+            </View>
+            <View style={styles.metricText}>
+              <Text style={styles.metricValue}>
+                {report?.building_height_m?.toFixed(1) || 0}m
+              </Text>
+              <Text style={styles.metricLabel}>Height</Text>
+            </View>
+          </View>
+
+          <View style={styles.metric}>
             <View style={[styles.metricIcon, { backgroundColor: `${colors.warning}15` }]}>
               <Ionicons name="time" size={16} color={colors.warning} />
             </View>

@@ -69,11 +69,15 @@ try:
     from inference import DamageAssessmentPipeline
     from enhanced_cost_estimation import EnhancedRegionalCostEstimator
     from building_area_estimator import BuildingAreaEstimator
+    from enhanced_building_analyzer import EnhancedBuildingAnalyzer
+    from volume_based_cost_estimation import VolumeBasedCostEstimator
 except ImportError as e:
     print(f"Warning: Could not import modules: {e}")
     DamageAssessmentPipeline = None
     EnhancedRegionalCostEstimator = None
     BuildingAreaEstimator = None
+    EnhancedBuildingAnalyzer = None
+    VolumeBasedCostEstimator = None
 
 app = Flask(__name__)
 CORS(app, origins=['*'], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
@@ -1097,22 +1101,72 @@ def assess_damage():
                     pipeline = models['pipeline']
                     cost_estimator = models['cost_estimator'] 
                     area_estimator = models['area_estimator']
+                    building_analyzer = models['building_analyzer']
+                    volume_cost_estimator = models['volume_cost_estimator']
                     
-                    logger.info("📐 Starting building area estimation")
-                    # Estimate building area - pass PIL image object, not path
-                    building_area_result = area_estimator.estimate_area(image, building_type, pin_location)
-                    building_area = building_area_result['estimated_area_sqm']  # Extract the float value
-                    logger.info(f"📏 Building area estimated: {building_area} sqm")
+                    logger.info("🏗️ Starting enhanced building analysis (height + area)")
+                    # Enhanced building analysis with height and area estimation
+                    building_analysis = building_analyzer.analyze_building(
+                        image, building_type, pin_location, 
+                        use_satellite=True, pin_location=pin_location
+                    )
+                    
+                    building_area = building_analysis['area_analysis']['estimated_area_sqm']
+                    building_height = building_analysis['height_analysis']['estimated_height_m']
+                    building_volume = building_analysis['volume_analysis']['estimated_volume_cubic_m']
+                    
+                    logger.info(f"📏 Building dimensions: {building_area} sqm, {building_height} m height, {building_volume} cubic m")
                     
                     logger.info("🔍 Starting damage assessment")
-                    # Perform damage assessment and cost estimation
-                    assessment_result = pipeline.assess_damage_and_cost(
-                        image_path, 
-                        building_area, 
-                        building_type, 
-                        pin_location
+                    # Perform damage assessment
+                    damage_results = pipeline.predict_damage_severity(image_path)
+                    
+                    logger.info("💰 Starting volume-based cost estimation")
+                    # Use volume-based cost estimation
+                    cost_results = volume_cost_estimator.calculate_repair_cost(
+                        severity_score=damage_results['severity_score'],
+                        damage_ratio=damage_results['severity_score'],
+                        building_area_sqm=building_area,
+                        building_type=building_type,
+                        regional_data={
+                            'region': 'Pakistan_Urban',
+                            'construction': 0.35,
+                            'materials': 0.40,
+                            'labor': 0.25,
+                            'currency': 'PKR',
+                            'exchange_rate': 280.0,
+                            'inflation_factor': 1.15,
+                            'market_volatility': 0.20,
+                            'emergency_premium': 1.25
+                        },
+                        damage_types=damage_types,
+                        confidence_score=damage_results['confidence'],
+                        building_height_m=building_height,
+                        building_volume_cubic_m=building_volume
                     )
-                    logger.info(f"✅ Assessment completed successfully")
+                    
+                    # Combine results
+                    assessment_result = {
+                        'damage_assessment': damage_results,
+                        'cost_estimation': cost_results,
+                        'building_analysis': building_analysis,
+                        'summary': {
+                            'severity_score': f"{damage_results['severity_score']:.3f}",
+                            'severity_category': damage_results['severity_category'],
+                            'confidence': f"{damage_results['confidence']:.2%}",
+                            'estimated_cost_usd': cost_results['total_estimated_cost_usd'],
+                            'cost_range': f"${cost_results['cost_range_low_usd']:,.2f} - ${cost_results['cost_range_high_usd']:,.2f}",
+                            'building_area_sqm': building_area,
+                            'building_height_m': building_height,
+                            'building_volume_cubic_m': building_volume,
+                            'calculation_method': cost_results['calculation_method'],
+                            'region': 'Pakistan_Urban',
+                            'building_type': building_type,
+                            'damage_types': damage_types or []
+                        }
+                    }
+                    
+                    logger.info(f"✅ Enhanced assessment completed successfully")
                     
                     # Clean up image from memory immediately after processing
                     image.close()
@@ -1140,13 +1194,17 @@ def assess_damage():
                 'image_path': filename,
                 'heatmap_path': os.path.basename(heatmap_path) if heatmap_path else None,
                 'building_area_sqm': building_area,
+                'building_height_m': building_height,
+                'building_volume_cubic_m': building_volume,
                 'damage_severity': damage_assessment.get('severity_category', summary.get('severity_category', 'Unknown')),
                 'damage_percentage': round(damage_assessment.get('severity_score', 0) * 100, 1),
                 'estimated_cost': cost_estimation.get('total_estimated_cost_usd', summary.get('estimated_cost_usd', 0)),
                 'confidence_score': damage_assessment.get('confidence', 0),
+                'calculation_method': cost_estimation.get('calculation_method', 'area_based'),
                 'assessment_details': {
                     'damage_assessment': damage_assessment,
                     'cost_estimation': cost_estimation,
+                    'building_analysis': building_analysis,
                     'summary': summary
                 },
                 'cost_breakdown': {
@@ -1154,6 +1212,11 @@ def assess_damage():
                     'non_structural_cost': cost_estimation.get('non_structural_cost', 0),
                     'content_cost': cost_estimation.get('content_cost', 0),
                     'total_cost_usd': cost_estimation.get('total_estimated_cost_usd', 0)
+                },
+                'building_dimensions': {
+                    'area_sqm': building_area,
+                    'height_m': building_height,
+                    'volume_cubic_m': building_volume
                 },
                 'recommendations': assessment_result.get('recommendations', [])
             }
@@ -1172,11 +1235,14 @@ def assess_damage():
             response_data = {
                 'success': True,
                 'assessment_id': assessment_id,
-                'message': 'Damage assessment completed successfully',
+                'message': 'Enhanced damage assessment completed successfully',
                 'damage_severity': damage_assessment.get('severity_category', summary.get('severity_category', 'Unknown')),
                 'damage_percentage': round(damage_assessment.get('severity_score', 0) * 100, 1),
                 'estimated_cost': cost_estimation.get('total_estimated_cost_usd', summary.get('estimated_cost_usd', 0)),
                 'building_area_sqm': building_area,
+                'building_height_m': building_height,
+                'building_volume_cubic_m': building_volume,
+                'calculation_method': cost_estimation.get('calculation_method', 'area_based'),
                 'heatmap_url': f'/api/results/{os.path.basename(heatmap_path)}' if heatmap_path else None,
                 'recommendations': assessment_result.get('recommendations', []),
                 # Additional detailed data
@@ -1187,6 +1253,17 @@ def assess_damage():
                     'non_structural_cost': cost_estimation.get('non_structural_cost', 0),
                     'content_cost': cost_estimation.get('content_cost', 0),
                     'total_cost_usd': cost_estimation.get('total_estimated_cost_usd', 0)
+                },
+                'building_dimensions': {
+                    'area_sqm': building_area,
+                    'height_m': building_height,
+                    'volume_cubic_m': building_volume
+                },
+                'enhanced_analysis': {
+                    'height_confidence': building_analysis['height_analysis']['confidence'],
+                    'area_confidence': building_analysis['area_analysis']['confidence'],
+                    'volume_confidence': building_analysis['volume_analysis']['confidence'],
+                    'satellite_used': building_analysis['area_analysis'].get('satellite_used', False)
                 }
             }
             
