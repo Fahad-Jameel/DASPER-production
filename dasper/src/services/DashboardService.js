@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthService from './AuthService';
-import ENV from '../../config/env';
+import ENV from '../../config/env.js';
 
 class DashboardService {
   // Get user dashboard statistics

@@ -19,6 +19,9 @@ import MainNavigator from './src/navigation/MainNavigator';
 // Services
 import AuthService from './src/services/AuthService';
 
+// Config
+import { initializeBackendUrl } from './config/env';
+
 // Themes
 import { lightTheme, darkTheme } from './src/theme/theme';
 
@@ -100,6 +103,9 @@ export default function App() {
 
   const loadApp = async () => {
     try {
+      // Initialize backend URL
+      await initializeBackendUrl();
+      
       // Simulate splash screen for better UX
       setTimeout(() => {
         setShowSplash(false);

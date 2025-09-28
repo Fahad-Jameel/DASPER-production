@@ -28,7 +28,7 @@ import SeverityIndicator from '../../components/SeverityIndicator';
 
 // Services
 import DashboardService from '../../services/DashboardService';
-import ENV from '../../../config/env';
+import ENV from '../../../config/env.js';
 
 import { colors, typography, spacing, shadowStyles } from '../../theme/theme';
 

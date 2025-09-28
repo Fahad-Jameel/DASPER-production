@@ -11,7 +11,7 @@ import {
   signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
-import ENV from '../../config/env';
+import ENV from '../../config/env.js';
 
 // Firebase configuration
 const firebaseConfig = {

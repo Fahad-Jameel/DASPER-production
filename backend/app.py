@@ -1,4 +1,11 @@
 # app.py - Enhanced DASPER Backend with Authentication and New Features
+
+# Configure matplotlib BEFORE any other imports to prevent GUI issues on macOS
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to prevent GUI issues on macOS
+import matplotlib.pyplot as plt
+plt.ioff()  # Turn off interactive mode globally
+
 from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import os
@@ -27,7 +34,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RL
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-import matplotlib.pyplot as plt
 import seaborn as sns
 from textblob import TextBlob
 
@@ -275,6 +281,9 @@ def init_model_manager():
 def generate_enhanced_heatmap(image_path, assessment_result):
     """Generate enhanced heatmap visualization"""
     try:
+        # Ensure matplotlib is in non-interactive mode
+        plt.ioff()  # Turn off interactive mode
+        
         # Create results directory if it doesn't exist
         os.makedirs(app.config['RESULTS_FOLDER'], exist_ok=True)
         
@@ -331,13 +340,22 @@ def generate_enhanced_heatmap(image_path, assessment_result):
         
         plt.tight_layout()
         plt.savefig(heatmap_path, dpi=300, bbox_inches='tight', facecolor='white')
-        plt.close()
+        plt.close(fig)  # Explicitly close the figure
+        plt.clf()  # Clear the current figure
+        plt.cla()  # Clear the current axes
         
         logger.info(f"✅ Enhanced heatmap generated: {heatmap_path}")
         return heatmap_path
         
     except Exception as e:
         logger.error(f"❌ Heatmap generation failed: {e}")
+        # Ensure matplotlib is cleaned up even on error
+        try:
+            plt.close('all')
+            plt.clf()
+            plt.cla()
+        except:
+            pass
         return None
 
 # [Include all previous helper functions: create_enhanced_pipeline, generate_enhanced_heatmap, etc.]

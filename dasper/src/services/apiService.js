@@ -1,7 +1,7 @@
 // services/apiService.js - Enhanced API Service
 import axios from 'axios';
-import ENV from '../../config/env';
-import NetworkUtils from '../../config/networkUtils';
+import ENV from '../../config/env.js';
+import NetworkUtils from '../../config/networkUtils.js';
 
 class ApiService {
   constructor() {
