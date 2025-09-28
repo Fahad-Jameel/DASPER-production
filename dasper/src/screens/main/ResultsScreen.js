@@ -162,6 +162,8 @@ const ResultsScreen = ({ route, navigation }) => {
             <p><strong>Type:</strong> ${building_info?.type || assessmentData.building_type}</p>
             <p><strong>Location:</strong> ${building_info?.location || assessmentData.pin_location}</p>
             <p><strong>Area:</strong> ${building_info?.area_sqm || assessmentData.estimated_building_area_sqm}m²</p>
+            <p><strong>Height:</strong> ${building_info?.height_m || 0}m</p>
+            <p><strong>Volume:</strong> ${building_info?.volume_cubic_m || 0}m³</p>
           </div>
           
           <div class="section">
@@ -218,6 +220,8 @@ const ResultsScreen = ({ route, navigation }) => {
   const building_info = {
     name: assessmentData.building_name,
     area_sqm: assessmentData.building_area_sqm,
+    height_m: assessmentData.building_height_m,
+    volume_cubic_m: assessmentData.building_volume_cubic_m,
     type: assessmentData.building_type,
     location: assessmentData.pin_location
   };
@@ -354,6 +358,22 @@ const ResultsScreen = ({ route, navigation }) => {
                 {building_info?.area_sqm || assessmentData.estimated_building_area_sqm || 0}m²
               </Text>
               <Text style={styles.metricLabel}>Building Area</Text>
+            </View>
+            
+            <View style={styles.metricCard}>
+              <Ionicons name="resize" size={32} color={colors.info} />
+              <Text style={styles.metricValue}>
+                {building_info?.height_m || 0}m
+              </Text>
+              <Text style={styles.metricLabel}>Building Height</Text>
+            </View>
+            
+            <View style={styles.metricCard}>
+              <Ionicons name="cube" size={32} color={colors.success} />
+              <Text style={styles.metricValue}>
+                {building_info?.volume_cubic_m || 0}m³
+              </Text>
+              <Text style={styles.metricLabel}>Volume</Text>
             </View>
             
             <View style={styles.metricCard}>
