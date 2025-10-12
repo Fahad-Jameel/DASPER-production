@@ -70,6 +70,7 @@ try:
     from enhanced_cost_estimation import EnhancedRegionalCostEstimator
     from building_area_estimator import BuildingAreaEstimator
     from enhanced_building_analyzer import EnhancedBuildingAnalyzer
+    from gemini_building_analyzer import GeminiBuildingAnalyzer
     from volume_based_cost_estimation import VolumeBasedCostEstimator
 except ImportError as e:
     print(f"Warning: Could not import modules: {e}")
@@ -77,6 +78,7 @@ except ImportError as e:
     EnhancedRegionalCostEstimator = None
     BuildingAreaEstimator = None
     EnhancedBuildingAnalyzer = None
+    GeminiBuildingAnalyzer = None
     VolumeBasedCostEstimator = None
 
 app = Flask(__name__)
@@ -385,8 +387,8 @@ def register():
         if db.users.find_one({'email': email}):
             return jsonify({'error': 'User already exists'}), 400
         
-        # Hash password
-        password_hash = generate_password_hash(password)
+        # Hash password using pbkdf2 (more compatible than scrypt)
+        password_hash = generate_password_hash(password, method='pbkdf2:sha256')
         
         # Create user
         user_data = {
@@ -430,7 +432,7 @@ def register():
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    """Login user"""
+    """Login user with improved password hash compatibility"""
     try:
         data = request.get_json()
         
@@ -442,7 +444,36 @@ def login():
         
         # Find user
         user = db.users.find_one({'email': email})
-        if not user or not check_password_hash(user['password_hash'], password):
+        if not user:
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+        # Check if user needs password reset (migrated from scrypt)
+        if user.get('password_reset_required', False):
+            return jsonify({
+                'error': 'Password reset required. Please use the "Forgot Password" feature.',
+                'reset_required': True
+            }), 401
+        
+        # Verify password with improved error handling
+        try:
+            password_valid = check_password_hash(user['password_hash'], password)
+        except Exception as hash_error:
+            logger.error(f"Password hash verification error for user {email}: {hash_error}")
+            
+            # If it's a scrypt error, mark user for password reset
+            if 'scrypt' in str(hash_error).lower():
+                db.users.update_one(
+                    {'_id': user['_id']},
+                    {'$set': {'password_reset_required': True}}
+                )
+                return jsonify({
+                    'error': 'Password reset required due to system update. Please use "Forgot Password".',
+                    'reset_required': True
+                }), 401
+            else:
+                return jsonify({'error': 'Invalid credentials'}), 401
+        
+        if not password_valid:
             return jsonify({'error': 'Invalid credentials'}), 401
         
         if not user.get('is_active', True):
@@ -593,6 +624,46 @@ def update_profile():
         
     except Exception as e:
         logger.error(f"Profile update error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password():
+    """Reset user password (for users with scrypt hashes)"""
+    try:
+        data = request.get_json()
+        email = data.get('email', '').lower()
+        new_password = data.get('new_password', '')
+        
+        if not email or not new_password:
+            return jsonify({'error': 'Email and new password required'}), 400
+        
+        # Find user
+        user = db.users.find_one({'email': email})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Hash new password using pbkdf2
+        new_password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+        
+        # Update user's password and remove reset requirement
+        db.users.update_one(
+            {'_id': user['_id']},
+            {
+                '$set': {
+                    'password_hash': new_password_hash,
+                    'password_reset_required': False,
+                    'updated_at': datetime.utcnow()
+                },
+                '$unset': {
+                    'migration_note': ''
+                }
+            }
+        )
+        
+        return jsonify({'message': 'Password reset successfully'})
+        
+    except Exception as e:
+        logger.error(f"Password reset error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # DISASTER ALERTS ENDPOINTS
@@ -1105,11 +1176,29 @@ def assess_damage():
                     volume_cost_estimator = models['volume_cost_estimator']
                     
                     logger.info("🏗️ Starting enhanced building analysis (height + area)")
-                    # Enhanced building analysis with height and area estimation
-                    building_analysis = building_analyzer.analyze_building(
-                        image, building_type, pin_location, 
-                        use_satellite=True, pin_location=pin_location
-                    )
+                    # Try Gemini-powered analysis first, fallback to traditional
+                    gemini_analyzer = models.get('gemini_building_analyzer')
+                    logger.info(f"🔍 Gemini analyzer available: {gemini_analyzer is not None}")
+                    if gemini_analyzer:
+                        logger.info(f"🔍 Gemini analyzer initialized: {gemini_analyzer.initialized}")
+                        logger.info(f"🔍 Gemini model available: {gemini_analyzer.gemini_model is not None}")
+                        if gemini_analyzer.initialized and gemini_analyzer.gemini_model:
+                            logger.info("🤖 Using Gemini Vision API for building analysis")
+                            building_analysis = gemini_analyzer.analyze_building_with_gemini(
+                                image, building_type, pin_location, pin_location
+                            )
+                        else:
+                            logger.warning("⚠️ Gemini analyzer not properly initialized, using traditional analysis")
+                            building_analysis = building_analyzer.analyze_building(
+                                image, building_type, pin_location, 
+                                use_satellite=True, pin_location=pin_location
+                            )
+                    else:
+                        logger.info("📐 Using traditional building analysis (Gemini not available)")
+                        building_analysis = building_analyzer.analyze_building(
+                            image, building_type, pin_location, 
+                            use_satellite=True, pin_location=pin_location
+                        )
                     
                     building_area = building_analysis['area_analysis']['estimated_area_sqm']
                     building_height = building_analysis['height_analysis']['estimated_height_m']

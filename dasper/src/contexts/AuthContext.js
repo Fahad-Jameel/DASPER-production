@@ -155,6 +155,16 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('❌ AuthContext: Login failed:', error.message);
+      
+      // Handle password reset requirement
+      if (error.message === 'PASSWORD_RESET_REQUIRED') {
+        dispatch({
+          type: AUTH_ACTIONS.LOGIN_FAILURE,
+          payload: 'Password reset required. Please use the "Forgot Password" feature.',
+        });
+        return { success: false, error: 'PASSWORD_RESET_REQUIRED' };
+      }
+      
       dispatch({
         type: AUTH_ACTIONS.LOGIN_FAILURE,
         payload: error.message || 'Login failed',

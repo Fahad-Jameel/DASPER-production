@@ -67,12 +67,31 @@ const LoginScreen = ({ navigation }) => {
       
       if (result.success) {
         // Navigation will be handled by the auth state change
+      } else if (result.error === 'PASSWORD_RESET_REQUIRED') {
+        Alert.alert(
+          'Password Reset Required',
+          'Your password needs to be reset due to a system update. Please use the "Forgot Password" feature to set a new password.',
+          [
+            { text: 'OK', style: 'default' }
+          ]
+        );
+        shakeForm();
       } else {
         Alert.alert('Login Failed', result.error || 'Please check your credentials');
         shakeForm();
       }
     } catch (error) {
-      Alert.alert('Login Failed', error.message || 'An unexpected error occurred');
+      if (error.message === 'PASSWORD_RESET_REQUIRED') {
+        Alert.alert(
+          'Password Reset Required',
+          'Your password needs to be reset due to a system update. Please use the "Forgot Password" feature to set a new password.',
+          [
+            { text: 'OK', style: 'default' }
+          ]
+        );
+      } else {
+        Alert.alert('Login Failed', error.message || 'An unexpected error occurred');
+      }
       shakeForm();
     } finally {
       setIsLoading(false);

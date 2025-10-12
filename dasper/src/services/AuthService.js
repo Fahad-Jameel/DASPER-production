@@ -132,6 +132,12 @@ class AuthService {
 
       if (!response.ok) {
         console.error(`❌ AuthService: Login failed with status ${response.status}:`, data.error);
+        
+        // Handle password reset requirement
+        if (data.reset_required) {
+          throw new Error('PASSWORD_RESET_REQUIRED');
+        }
+        
         throw new Error(data.error || 'Login failed');
       }
 
@@ -456,14 +462,19 @@ class AuthService {
   }
 
   // Reset password
-  async resetPassword(email) {
+  async resetPassword(email, newPassword) {
     try {
+      console.log(`Attempting to reset password for: ${email}`);
+      
       const response = await fetch(`${ENV.API_BASE_URL}/api/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ 
+          email: email,
+          new_password: newPassword 
+        }),
       });
 
       const data = await response.json();
@@ -472,6 +483,7 @@ class AuthService {
         throw new Error(data.error || 'Password reset failed');
       }
 
+      console.log('Password reset successful');
       return data;
     } catch (error) {
       console.error('Reset password error:', error);
