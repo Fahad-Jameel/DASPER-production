@@ -1,4 +1,4 @@
-# gemini_building_analyzer.py - Gemini Vision API Enhanced Building Analysis
+# cv_building_analyzer.py - CV Model Enhanced Building Analysis
 import os
 import base64
 import json
@@ -13,15 +13,15 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-class GeminiBuildingAnalyzer:
+class CVBuildingAnalyzer:
     """
-    Enhanced building analyzer using Google Gemini Vision API
+    Enhanced building analyzer using CV Model
     for accurate height and area estimation from images
     """
     
     def __init__(self):
-        self.gemini_model = None
-        self.initialized = self._initialize_gemini()
+        self.cv_model = None
+        self.initialized = self._initialize_cv_model()
         
         # Building type defaults for validation
         self.building_height_defaults = {
@@ -66,8 +66,8 @@ class GeminiBuildingAnalyzer:
             }
         }
     
-    def _initialize_gemini(self):
-        """Initialize Gemini Vision API"""
+    def _initialize_cv_model(self):
+        """Initialize CV Model"""
         try:
             api_key = os.getenv('GEMINI_API_KEY')
             logger.info(f"🔍 Checking GEMINI_API_KEY: {'Found' if api_key else 'Not found'}")
@@ -75,17 +75,17 @@ class GeminiBuildingAnalyzer:
                 logger.warning("⚠️ GEMINI_API_KEY not found in environment variables")
                 return False
             
-            logger.info("🔧 Configuring Gemini API...")
+            logger.info("🔧 Configuring CV Model API...")
             genai.configure(api_key=api_key)
             
-            logger.info("🔧 Initializing Gemini model...")
+            logger.info("🔧 Initializing CV model...")
             # Initialize the vision model
-            self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+            self.cv_model = genai.GenerativeModel('gemini-2.5-flash')
             logger.info("✅ CV Model initialized successfully")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Gemini Vision API: {e}")
+            logger.error(f"❌ Failed to initialize CV Model: {e}")
             import traceback
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return False
@@ -112,7 +112,7 @@ class GeminiBuildingAnalyzer:
             region_type = self._get_region_type(location)
             
             # Analyze with CV Model
-            gemini_analysis = self._analyze_with_gemini_vision(image, building_type, region_type, pin_location)
+            cv_analysis = self._analyze_with_cv_vision(image, building_type, region_type, pin_location)
             
             # Validate and refine estimates
             validated_height = self._validate_height_estimate(
@@ -140,7 +140,7 @@ class GeminiBuildingAnalyzer:
                     'bounds': {
                         'min': 0.5,  # Minimal realistic height
                         'max': 1000.0,  # Maximum realistic height
-                        'note': 'No artificial limits applied - trusting Gemini analysis'
+                        'note': 'No artificial limits applied - trusting CV Model analysis'
                     }
                 },
                 'area_analysis': {
@@ -169,26 +169,26 @@ class GeminiBuildingAnalyzer:
             }
             
         except Exception as e:
-            logger.error(f"Gemini building analysis error: {e}")
+            logger.error(f"CV Model building analysis error: {e}")
             return self._get_fallback_analysis(building_type, region_type)
     
-    def _analyze_with_gemini_vision(self, image, building_type, region_type, pin_location):
-        """Analyze building using Gemini Vision API"""
+    def _analyze_with_cv_vision(self, image, building_type, region_type, pin_location):
+        """Analyze building using CV Model"""
         try:
-            if not self.gemini_model:
-                logger.warning("Gemini model not available, using fallback")
+            if not self.cv_model:
+                logger.warning("CV model not available, using fallback")
                 return self._get_fallback_gemini_analysis()
             
-            # Prepare the prompt for Gemini
+            # Prepare the prompt for CV Model
             prompt = self._create_analysis_prompt(building_type, region_type, pin_location)
             
-            # Convert image to base64 for Gemini
+            # Convert image to base64 for CV Model
             img_buffer = io.BytesIO()
             image.save(img_buffer, format='JPEG', quality=95)
             img_data = img_buffer.getvalue()
             
-            # Generate content with Gemini
-            response = self.gemini_model.generate_content([
+            # Generate content with CV Model
+            response = self.cv_model.generate_content([
                 prompt,
                 {
                     "mime_type": "image/jpeg",
@@ -196,18 +196,18 @@ class GeminiBuildingAnalyzer:
                 }
             ])
             
-            # Parse Gemini response
+            # Parse CV Model response
             gemini_analysis = self._parse_gemini_response(response.text)
             
             logger.info(f"✅ CV Model analysis completed: {gemini_analysis}")
             return gemini_analysis
             
         except Exception as e:
-            logger.error(f"Gemini Vision API error: {e}")
+            logger.error(f"CV Model API error: {e}")
             return self._get_fallback_gemini_analysis()
     
     def _create_analysis_prompt(self, building_type, region_type, pin_location):
-        """Create detailed prompt for Gemini Vision API"""
+        """Create detailed prompt for CV Model"""
         
         location_context = ""
         if pin_location:

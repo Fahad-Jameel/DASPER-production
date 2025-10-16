@@ -70,7 +70,7 @@ try:
     from enhanced_cost_estimation import EnhancedRegionalCostEstimator
     from building_area_estimator import BuildingAreaEstimator
     from enhanced_building_analyzer import EnhancedBuildingAnalyzer
-    from gemini_building_analyzer import GeminiBuildingAnalyzer
+    from cv_building_analyzer import CVBuildingAnalyzer
     from volume_based_cost_estimation import VolumeBasedCostEstimator
 except ImportError as e:
     print(f"Warning: Could not import modules: {e}")
@@ -78,7 +78,7 @@ except ImportError as e:
     EnhancedRegionalCostEstimator = None
     BuildingAreaEstimator = None
     EnhancedBuildingAnalyzer = None
-    GeminiBuildingAnalyzer = None
+    CVBuildingAnalyzer = None
     VolumeBasedCostEstimator = None
 
 app = Flask(__name__)
@@ -242,8 +242,8 @@ def init_regional_indices():
     
     logger.info("✅ Regional indices initialized")
 
-def init_gemini():
-    """Initialize Gemini AI"""
+def init_cv_model():
+    """Initialize CV Model"""
     try:
         api_key = os.getenv('GEMINI_API_KEY')
         if not api_key:
@@ -1176,25 +1176,25 @@ def assess_damage():
                     volume_cost_estimator = models['volume_cost_estimator']
                     
                     logger.info("🏗️ Starting enhanced building analysis (height + area)")
-                    # Try Gemini-powered analysis first, fallback to traditional
-                    gemini_analyzer = models.get('gemini_building_analyzer')
-                    logger.info(f"🔍 Gemini analyzer available: {gemini_analyzer is not None}")
-                    if gemini_analyzer:
-                        logger.info(f"🔍 Gemini analyzer initialized: {gemini_analyzer.initialized}")
-                        logger.info(f"🔍 Gemini model available: {gemini_analyzer.gemini_model is not None}")
-                        if gemini_analyzer.initialized and gemini_analyzer.gemini_model:
-                            logger.info("🤖 Using Gemini Vision API for building analysis")
-                            building_analysis = gemini_analyzer.analyze_building_with_gemini(
+                    # Try CV Model-powered analysis first, fallback to traditional
+                    cv_analyzer = models.get('cv_building_analyzer')
+                    logger.info(f"🔍 CV analyzer available: {cv_analyzer is not None}")
+                    if cv_analyzer:
+                        logger.info(f"🔍 CV analyzer initialized: {cv_analyzer.initialized}")
+                        logger.info(f"🔍 CV model available: {cv_analyzer.cv_model is not None}")
+                        if cv_analyzer.initialized and cv_analyzer.cv_model:
+                            logger.info("🤖 Using CV Model for building analysis")
+                            building_analysis = cv_analyzer.analyze_building_with_cv_model(
                                 image, building_type, pin_location, pin_location
                             )
                         else:
-                            logger.warning("⚠️ Gemini analyzer not properly initialized, using traditional analysis")
+                            logger.warning("⚠️ CV analyzer not properly initialized, using traditional analysis")
                             building_analysis = building_analyzer.analyze_building(
                                 image, building_type, pin_location, 
                                 use_satellite=True, pin_location=pin_location
                             )
                     else:
-                        logger.info("📐 Using traditional building analysis (Gemini not available)")
+                        logger.info("📐 Using traditional building analysis (CV Model not available)")
                         building_analysis = building_analyzer.analyze_building(
                             image, building_type, pin_location, 
                             use_satellite=True, pin_location=pin_location
@@ -1210,8 +1210,12 @@ def assess_damage():
                     # Perform damage assessment
                     damage_results = pipeline.predict_damage_severity(image_path)
                     
-                    logger.info("💰 Starting volume-based cost estimation")
-                    # Use volume-based cost estimation
+                    logger.info("💰 Starting volume-based cost estimation with regional data")
+                    # Get regional costs and repair time from CV Model analysis
+                    regional_costs = building_analysis.get('regional_costs', {})
+                    repair_time_estimate = building_analysis.get('repair_time_estimate', {})
+                    
+                    # Use volume-based cost estimation with regional data
                     cost_results = volume_cost_estimator.calculate_repair_cost(
                         severity_score=damage_results['severity_score'],
                         damage_ratio=damage_results['severity_score'],
@@ -1231,7 +1235,9 @@ def assess_damage():
                         damage_types=damage_types,
                         confidence_score=damage_results['confidence'],
                         building_height_m=building_height,
-                        building_volume_cubic_m=building_volume
+                        building_volume_cubic_m=building_volume,
+                        regional_costs=regional_costs,
+                        repair_time_estimate=repair_time_estimate
                     )
                     
                     # Combine results
@@ -1243,8 +1249,8 @@ def assess_damage():
                             'severity_score': f"{damage_results['severity_score']:.3f}",
                             'severity_category': damage_results['severity_category'],
                             'confidence': f"{damage_results['confidence']:.2%}",
-                            'estimated_cost_usd': cost_results['total_estimated_cost_usd'],
-                            'cost_range': f"${cost_results['cost_range_low_usd']:,.2f} - ${cost_results['cost_range_high_usd']:,.2f}",
+                            'estimated_cost_pkr': cost_results['total_estimated_cost_pkr'],
+                            'cost_range': f"PKR {cost_results['cost_range_low_pkr']:,.2f} - PKR {cost_results['cost_range_high_pkr']:,.2f}",
                             'building_area_sqm': building_area,
                             'building_height_m': building_height,
                             'building_volume_cubic_m': building_volume,
@@ -1287,7 +1293,7 @@ def assess_damage():
                 'building_volume_cubic_m': building_volume,
                 'damage_severity': damage_assessment.get('severity_category', summary.get('severity_category', 'Unknown')),
                 'damage_percentage': round(damage_assessment.get('severity_score', 0) * 100, 1),
-                'estimated_cost': cost_estimation.get('total_estimated_cost_usd', summary.get('estimated_cost_usd', 0)),
+                'estimated_cost': cost_estimation.get('total_estimated_cost_pkr', summary.get('estimated_cost_pkr', 0)),
                 'confidence_score': damage_assessment.get('confidence', 0),
                 'calculation_method': cost_estimation.get('calculation_method', 'area_based'),
                 'assessment_details': {
@@ -1300,7 +1306,8 @@ def assess_damage():
                     'structural_cost': cost_estimation.get('structural_cost', 0),
                     'non_structural_cost': cost_estimation.get('non_structural_cost', 0),
                     'content_cost': cost_estimation.get('content_cost', 0),
-                    'total_cost_usd': cost_estimation.get('total_estimated_cost_usd', 0)
+                    'total_cost_pkr': cost_estimation.get('total_estimated_cost_pkr', 0),
+                    'repair_time_days': cost_estimation.get('repair_time_days', 0)
                 },
                 'building_dimensions': {
                     'area_sqm': building_area,
@@ -1327,7 +1334,7 @@ def assess_damage():
                 'message': 'Enhanced damage assessment completed successfully',
                 'damage_severity': damage_assessment.get('severity_category', summary.get('severity_category', 'Unknown')),
                 'damage_percentage': round(damage_assessment.get('severity_score', 0) * 100, 1),
-                'estimated_cost': cost_estimation.get('total_estimated_cost_usd', summary.get('estimated_cost_usd', 0)),
+                'estimated_cost': cost_estimation.get('total_estimated_cost_pkr', summary.get('estimated_cost_pkr', 0)),
                 'building_area_sqm': building_area,
                 'building_height_m': building_height,
                 'building_volume_cubic_m': building_volume,
@@ -1341,7 +1348,7 @@ def assess_damage():
                     'structural_cost': cost_estimation.get('structural_cost', 0),
                     'non_structural_cost': cost_estimation.get('non_structural_cost', 0),
                     'content_cost': cost_estimation.get('content_cost', 0),
-                    'total_cost_usd': cost_estimation.get('total_estimated_cost_usd', 0)
+                    'total_cost_pkr': cost_estimation.get('total_estimated_cost_pkr', 0)
                 },
                 'building_dimensions': {
                     'area_sqm': building_area,
@@ -1353,7 +1360,21 @@ def assess_damage():
                     'area_confidence': building_analysis['area_analysis']['confidence'],
                     'volume_confidence': building_analysis['volume_analysis']['confidence'],
                     'satellite_used': building_analysis['area_analysis'].get('satellite_used', False)
-                }
+                },
+                'cv_analysis': building_analysis.get('cv_analysis', {}),
+                'cv_insights': {
+                    'height_insights': building_analysis['height_analysis'].get('cv_insights', ''),
+                    'area_insights': building_analysis['area_analysis'].get('cv_insights', ''),
+                    'building_type_detected': building_analysis.get('cv_analysis', {}).get('building_type_detected', building_type),
+                    'architectural_features': building_analysis.get('cv_analysis', {}).get('architectural_features', []),
+                    'construction_materials': building_analysis.get('cv_analysis', {}).get('construction_materials', []),
+                    'age_estimate': building_analysis.get('cv_analysis', {}).get('age_estimate', 'unknown'),
+                    'condition_assessment': building_analysis.get('cv_analysis', {}).get('condition_assessment', 'unknown'),
+                    'reference_objects': building_analysis.get('cv_analysis', {}).get('reference_objects', []),
+                    'limitations': building_analysis.get('cv_analysis', {}).get('limitations', [])
+                },
+                'regional_costs': building_analysis.get('regional_costs', {}),
+                'repair_time_estimate': building_analysis.get('repair_time_estimate', {})
             }
             
             logger.info("Assessment completed successfully")
@@ -1585,7 +1606,7 @@ def generate_assessment_pdf(assessment):
             ['Non-Structural Cost:', f"{cost_results.get('non_structural_cost', 0):,.2f} {currency}"],
             ['Content Cost:', f"{cost_results.get('content_cost', 0):,.2f} {currency}"],
             ['Professional Fees:', f"{cost_results.get('professional_fees', 0):,.2f} {currency}"],
-            ['Total Estimated Cost:', f"{cost_results.get('total_estimated_cost_usd', 0):,.2f} USD"],
+            ['Total Estimated Cost:', f"PKR {cost_results.get('total_estimated_cost_pkr', 0):,.2f}"],
             ['Repair Time Estimate:', f"{cost_results.get('repair_time_days', 0)} days"]
         ]
         
@@ -2200,8 +2221,8 @@ if __name__ == '__main__':
     print("📊 Initializing database...")
     init_database()
     
-    print("🤖 Initializing Gemini AI...")
-    init_gemini()
+    print("🤖 Initializing CV Model...")
+    init_cv_model()
     
     print("🧠 Initializing model manager with lazy loading...")
     if not init_model_manager():

@@ -15,7 +15,7 @@ from inference import DamageAssessmentPipeline
 from enhanced_cost_estimation import EnhancedRegionalCostEstimator
 from building_area_estimator import BuildingAreaEstimator
 from enhanced_building_analyzer import EnhancedBuildingAnalyzer
-from gemini_building_analyzer import GeminiBuildingAnalyzer
+from cv_building_analyzer import CVBuildingAnalyzer
 from volume_based_cost_estimation import VolumeBasedCostEstimator
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class ModelManager:
         self._cost_estimator = None
         self._area_estimator = None
         self._building_analyzer = None
-        self._gemini_building_analyzer = None
+        self._cv_building_analyzer = None
         self._volume_cost_estimator = None
         
         # Model lifecycle tracking
@@ -143,7 +143,7 @@ class ModelManager:
             
             # Load Gemini building analyzer for AI-powered analysis
             logger.info("🤖 Loading Gemini building analyzer...")
-            self._gemini_building_analyzer = GeminiBuildingAnalyzer()
+            self._cv_building_analyzer = CVBuildingAnalyzer()
             
             # Load volume-based cost estimator
             logger.info("💰 Loading volume-based cost estimator...")
@@ -179,7 +179,7 @@ class ModelManager:
             self._cost_estimator = None
             self._area_estimator = None
             self._building_analyzer = None
-            self._gemini_building_analyzer = None
+            self._cv_building_analyzer = None
             self._volume_cost_estimator = None
             
             # Force garbage collection
@@ -222,7 +222,7 @@ class ModelManager:
                     'cost_estimator': self._cost_estimator,
                     'area_estimator': self._area_estimator,
                     'building_analyzer': self._building_analyzer,
-                    'gemini_building_analyzer': self._gemini_building_analyzer,
+                    'cv_building_analyzer': self._cv_building_analyzer,
                     'volume_cost_estimator': self._volume_cost_estimator
                 }
                 

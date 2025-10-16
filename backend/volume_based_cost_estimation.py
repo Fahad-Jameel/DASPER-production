@@ -14,42 +14,42 @@ class VolumeBasedCostEstimator:
     def __init__(self, db=None):
         self.db = db
         
-        # Base costs per cubic meter in USD (following DASPER framework)
-        # Adjusted to be more realistic compared to area-based costs
+        # Base costs per cubic meter in PKR (Pakistan Rupees)
+        # Adjusted for Pakistan construction costs
         self.base_volume_costs = {
             'residential': {
-                'structural': {'min': 15, 'max': 120},  # per cubic meter (reduced from 50-400)
-                'non_structural': {'min': 8, 'max': 60},  # per cubic meter (reduced from 25-200)
-                'content': {'min': 5, 'max': 30}  # per cubic meter (reduced from 15-100)
+                'structural': {'min': 4200, 'max': 33600},  # per cubic meter in PKR
+                'non_structural': {'min': 2240, 'max': 16800},  # per cubic meter in PKR
+                'content': {'min': 1400, 'max': 8400}  # per cubic meter in PKR
             },
             'commercial': {
-                'structural': {'min': 20, 'max': 180},  # per cubic meter (reduced from 75-600)
-                'non_structural': {'min': 12, 'max': 90},  # per cubic meter (reduced from 40-300)
-                'content': {'min': 6, 'max': 45}  # per cubic meter (reduced from 20-150)
+                'structural': {'min': 5600, 'max': 50400},  # per cubic meter in PKR
+                'non_structural': {'min': 3360, 'max': 25200},  # per cubic meter in PKR
+                'content': {'min': 1680, 'max': 12600}  # per cubic meter in PKR
             },
             'industrial': {
-                'structural': {'min': 25, 'max': 225},  # per cubic meter (reduced from 100-750)
-                'non_structural': {'min': 15, 'max': 112},  # per cubic meter (reduced from 50-375)
-                'content': {'min': 9, 'max': 60}  # per cubic meter (reduced from 30-200)
+                'structural': {'min': 7000, 'max': 63000},  # per cubic meter in PKR
+                'non_structural': {'min': 4200, 'max': 31360},  # per cubic meter in PKR
+                'content': {'min': 2520, 'max': 16800}  # per cubic meter in PKR
             }
         }
         
-        # Traditional area-based costs (for comparison and fallback)
+        # Traditional area-based costs in PKR (for comparison and fallback)
         self.base_area_costs = {
             'residential': {
-                'structural': {'min': 100, 'max': 800},
-                'non_structural': {'min': 50, 'max': 400},
-                'content': {'min': 25, 'max': 200}
+                'structural': {'min': 28000, 'max': 224000},  # per sqm in PKR
+                'non_structural': {'min': 14000, 'max': 112000},  # per sqm in PKR
+                'content': {'min': 7000, 'max': 56000}  # per sqm in PKR
             },
             'commercial': {
-                'structural': {'min': 150, 'max': 1200},
-                'non_structural': {'min': 75, 'max': 600},
-                'content': {'min': 40, 'max': 300}
+                'structural': {'min': 42000, 'max': 336000},  # per sqm in PKR
+                'non_structural': {'min': 21000, 'max': 168000},  # per sqm in PKR
+                'content': {'min': 11200, 'max': 84000}  # per sqm in PKR
             },
             'industrial': {
-                'structural': {'min': 200, 'max': 1500},
-                'non_structural': {'min': 100, 'max': 750},
-                'content': {'min': 60, 'max': 400}
+                'structural': {'min': 56000, 'max': 420000},  # per sqm in PKR
+                'non_structural': {'min': 28000, 'max': 210000},  # per sqm in PKR
+                'content': {'min': 16800, 'max': 112000}  # per sqm in PKR
             }
         }
         
@@ -77,7 +77,8 @@ class VolumeBasedCostEstimator:
     def calculate_repair_cost(self, severity_score, damage_ratio, building_area_sqm, 
                             building_type, regional_data, damage_types=None, 
                             confidence_score=1.0, ai_analysis=None, 
-                            building_height_m=None, building_volume_cubic_m=None):
+                            building_height_m=None, building_volume_cubic_m=None,
+                            regional_costs=None, repair_time_estimate=None):
         """
         Calculate repair cost using volume-based methodology with area fallback
         
@@ -118,38 +119,54 @@ class VolumeBasedCostEstimator:
             else:
                 logger.info("Using area-based calculation (no height/volume data)")
             
-            # Calculate base costs for each component
-            if use_volume:
-                structural_cost = self._calculate_volume_component_cost(
-                    severity_score, damage_ratio, building_volume_cubic_m,
-                    self.base_volume_costs[building_type]['structural']
+            # Use regional costs from Gemini if available
+            if regional_costs:
+                logger.info(f"Using Gemini regional costs for {regional_costs.get('location', 'Pakistan')}")
+                structural_cost = self._calculate_regional_component_cost(
+                    severity_score, damage_ratio, building_area_sqm, building_volume_cubic_m,
+                    regional_costs, 'structural'
                 )
-                
-                non_structural_cost = self._calculate_volume_component_cost(
-                    severity_score * 0.8, damage_ratio * 0.7, building_volume_cubic_m,
-                    self.base_volume_costs[building_type]['non_structural']
+                non_structural_cost = self._calculate_regional_component_cost(
+                    severity_score, damage_ratio, building_area_sqm, building_volume_cubic_m,
+                    regional_costs, 'non_structural'
                 )
-                
-                content_cost = self._calculate_volume_component_cost(
-                    severity_score * 0.6, damage_ratio * 0.5, building_volume_cubic_m,
-                    self.base_volume_costs[building_type]['content']
+                content_cost = self._calculate_regional_component_cost(
+                    severity_score, damage_ratio, building_area_sqm, building_volume_cubic_m,
+                    regional_costs, 'content'
                 )
             else:
-                # Fallback to area-based calculation
-                structural_cost = self._calculate_area_component_cost(
-                    severity_score, damage_ratio, building_area_sqm,
-                    self.base_area_costs[building_type]['structural']
-                )
-                
-                non_structural_cost = self._calculate_area_component_cost(
-                    severity_score * 0.8, damage_ratio * 0.7, building_area_sqm,
-                    self.base_area_costs[building_type]['non_structural']
-                )
-                
-                content_cost = self._calculate_area_component_cost(
-                    severity_score * 0.6, damage_ratio * 0.5, building_area_sqm,
-                    self.base_area_costs[building_type]['content']
-                )
+                # Calculate base costs for each component using traditional method
+                if use_volume:
+                    structural_cost = self._calculate_volume_component_cost(
+                        severity_score, damage_ratio, building_volume_cubic_m,
+                        self.base_volume_costs[building_type]['structural']
+                    )
+                    
+                    non_structural_cost = self._calculate_volume_component_cost(
+                        severity_score * 0.8, damage_ratio * 0.7, building_volume_cubic_m,
+                        self.base_volume_costs[building_type]['non_structural']
+                    )
+                    
+                    content_cost = self._calculate_volume_component_cost(
+                        severity_score * 0.6, damage_ratio * 0.5, building_volume_cubic_m,
+                        self.base_volume_costs[building_type]['content']
+                    )
+                else:
+                    # Fallback to area-based calculation
+                    structural_cost = self._calculate_area_component_cost(
+                        severity_score, damage_ratio, building_area_sqm,
+                        self.base_area_costs[building_type]['structural']
+                    )
+                    
+                    non_structural_cost = self._calculate_area_component_cost(
+                        severity_score * 0.8, damage_ratio * 0.7, building_area_sqm,
+                        self.base_area_costs[building_type]['non_structural']
+                    )
+                    
+                    content_cost = self._calculate_area_component_cost(
+                        severity_score * 0.6, damage_ratio * 0.5, building_area_sqm,
+                        self.base_area_costs[building_type]['content']
+                    )
             
             # Apply regional factors
             regional_multiplier = self._calculate_regional_multiplier(regional_data)
@@ -211,10 +228,17 @@ class VolumeBasedCostEstimator:
             cost_range_low = total_cost * (1 - uncertainty_factor)
             cost_range_high = total_cost * (1 + uncertainty_factor)
             
-            # Estimate repair time
-            severity_category = self._get_severity_category(severity_score)
-            base_repair_days = self.repair_time_factors[severity_category]
-            repair_time_days = int(base_repair_days * (1 + damage_multiplier * 0.2))
+            # Estimate repair time - use Gemini estimate if available
+            logger.info(f"🔍 Debug - repair_time_estimate: {repair_time_estimate}")
+            if repair_time_estimate and repair_time_estimate.get('estimated_days'):
+                repair_time_days = int(repair_time_estimate['estimated_days'])
+                logger.info(f"Using Gemini repair time estimate: {repair_time_days} days")
+            else:
+                # Fallback to traditional calculation
+                severity_category = self._get_severity_category(severity_score)
+                base_repair_days = self.repair_time_factors[severity_category]
+                repair_time_days = int(base_repair_days * (1 + damage_multiplier * 0.2))
+                logger.info(f"Using traditional repair time estimate: {repair_time_days} days")
             
             # Use AI analysis for refinement if available
             if ai_analysis and isinstance(ai_analysis, dict) and 'damage_percentage' in ai_analysis:
@@ -237,9 +261,9 @@ class VolumeBasedCostEstimator:
                 'material_cost': round(float(material_cost), 2),
                 'equipment_cost': round(float(equipment_cost), 2),
                 'contingency': round(float(contingency), 2),
-                'total_estimated_cost_usd': round(float(total_cost), 2),
-                'cost_range_low_usd': round(float(cost_range_low), 2),
-                'cost_range_high_usd': round(float(cost_range_high), 2),
+                'total_estimated_cost_pkr': round(float(total_cost), 2),
+                'cost_range_low_pkr': round(float(cost_range_low), 2),
+                'cost_range_high_pkr': round(float(cost_range_high), 2),
                 'repair_time_days': int(repair_time_days),
                 'severity_score': float(severity_score),
                 'damage_ratio': float(damage_ratio),
@@ -273,9 +297,9 @@ class VolumeBasedCostEstimator:
                 'material_cost': round(fallback_cost * 0.6, 2),
                 'equipment_cost': round(fallback_cost * 0.1, 2),
                 'contingency': round(fallback_cost * 0.2, 2),
-                'total_estimated_cost_usd': round(fallback_cost * 1.4, 2),
-                'cost_range_low_usd': round(fallback_cost * 1.2, 2),
-                'cost_range_high_usd': round(fallback_cost * 1.6, 2),
+                'total_estimated_cost_pkr': round(fallback_cost * 1.4, 2),
+                'cost_range_low_pkr': round(fallback_cost * 1.2, 2),
+                'cost_range_high_pkr': round(fallback_cost * 1.6, 2),
                 'repair_time_days': 60,
                 'severity_score': float(severity_score),
                 'damage_ratio': float(damage_ratio) if 'damage_ratio' in locals() else float(severity_score) * 0.8,
@@ -291,6 +315,44 @@ class VolumeBasedCostEstimator:
                 'error': str(e),
                 'fallback_used': True
             }
+    
+    def _calculate_regional_component_cost(self, severity, damage_ratio, area, volume, regional_costs, component_type):
+        """Calculate component cost using Gemini regional cost data"""
+        try:
+            # Get regional cost breakdown
+            cost_breakdown = regional_costs.get('cost_breakdown', {})
+            regional_multiplier = regional_costs.get('regional_multiplier', 1.0)
+            
+            # Map component types to regional cost keys
+            cost_mapping = {
+                'structural': 'structural_materials',
+                'non_structural': 'non_structural_materials',
+                'content': 'equipment'  # Using equipment as proxy for content
+            }
+            
+            base_cost_key = cost_mapping.get(component_type, 'structural_materials')
+            base_cost_per_sqm = cost_breakdown.get(base_cost_key, 45000)  # Default fallback
+            
+            # Calculate base cost
+            if volume and volume > 0:
+                # Use volume-based calculation
+                base_cost = (base_cost_per_sqm * area * (volume / area)) * damage_ratio
+            else:
+                # Use area-based calculation
+                base_cost = base_cost_per_sqm * area * damage_ratio
+            
+            # Apply severity multiplier
+            severity_multiplier = 0.1 + (severity * 0.9)  # 0.1 to 1.0 range
+            component_cost = base_cost * severity_multiplier * regional_multiplier
+            
+            logger.info(f"Regional {component_type} cost: PKR {component_cost:,.2f} (base: {base_cost_per_sqm}, area: {area}, severity: {severity:.2f})")
+            return component_cost
+            
+        except Exception as e:
+            logger.error(f"Error calculating regional {component_type} cost: {e}")
+            # Fallback to traditional calculation
+            return self._calculate_volume_component_cost(severity, damage_ratio, volume or area, 
+                                                       {'min': 10000, 'max': 50000})
     
     def _calculate_volume_component_cost(self, severity, damage_ratio, volume, cost_range):
         """Calculate cost for a specific component based on volume"""

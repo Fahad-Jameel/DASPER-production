@@ -17,17 +17,17 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def test_gemini_analyzer():
+def test_cv_analyzer():
     """Test the Gemini building analyzer with a sample image"""
     
     try:
         # Import the analyzer
-        from gemini_building_analyzer import GeminiBuildingAnalyzer
+        from cv_building_analyzer import CVBuildingAnalyzer
         
         # Initialize analyzer
-        analyzer = GeminiBuildingAnalyzer()
+        analyzer = CVBuildingAnalyzer()
         
-        if not analyzer.gemini_model:
+        if not analyzer.cv_model:
             logger.error("❌ Gemini model not initialized. Check GEMINI_API_KEY")
             return False
         
@@ -38,7 +38,7 @@ def test_gemini_analyzer():
         # Test analysis
         logger.info("🧪 Testing Gemini building analyzer...")
         
-        result = analyzer.analyze_building_with_gemini(
+        result = analyzer.analyze_building_with_cv_model(
             image=test_image,
             building_type='residential',
             location={'region_type': 'urban'},
@@ -53,14 +53,14 @@ def test_gemini_analyzer():
         logger.info(f"   Confidence: {result['height_analysis']['confidence']}")
         logger.info(f"   Method: {result['height_analysis']['method']}")
         
-        if 'gemini_analysis' in result:
-            gemini_data = result['gemini_analysis']
+        if 'cv_analysis' in result:
+            cv_data = result['cv_analysis']
             logger.info("🤖 Gemini Insights:")
-            logger.info(f"   Building Type Detected: {gemini_data.get('building_type_detected', 'N/A')}")
-            logger.info(f"   Architectural Features: {gemini_data.get('architectural_features', [])}")
-            logger.info(f"   Construction Materials: {gemini_data.get('construction_materials', [])}")
-            logger.info(f"   Age Estimate: {gemini_data.get('age_estimate', 'N/A')}")
-            logger.info(f"   Condition: {gemini_data.get('condition_assessment', 'N/A')}")
+            logger.info(f"   Building Type Detected: {cv_data.get('building_type_detected', 'N/A')}")
+            logger.info(f"   Architectural Features: {cv_data.get('architectural_features', [])}")
+            logger.info(f"   Construction Materials: {cv_data.get('construction_materials', [])}")
+            logger.info(f"   Age Estimate: {cv_data.get('age_estimate', 'N/A')}")
+            logger.info(f"   Condition: {cv_data.get('condition_assessment', 'N/A')}")
         
         logger.info("✅ Gemini analyzer test completed successfully!")
         return True
@@ -116,11 +116,11 @@ def test_with_real_image():
                 
                 logger.info(f"📸 Testing with real image: {latest_image}")
                 
-                from gemini_building_analyzer import GeminiBuildingAnalyzer
-                analyzer = GeminiBuildingAnalyzer()
+                from cv_building_analyzer import CVBuildingAnalyzer
+                analyzer = CVBuildingAnalyzer()
                 
-                if analyzer.gemini_model:
-                    result = analyzer.analyze_building_with_gemini(
+                if analyzer.cv_model:
+                    result = analyzer.analyze_building_with_cv_model(
                         image=image_path,
                         building_type='residential',
                         location={'region_type': 'urban'},
@@ -133,14 +133,14 @@ def test_with_real_image():
                     logger.info(f"   Volume: {result['volume_analysis']['estimated_volume_cubic_m']} cubic m")
                     logger.info(f"   Confidence: {result['height_analysis']['confidence']}")
                     
-                    if 'gemini_analysis' in result:
-                        gemini_data = result['gemini_analysis']
+                    if 'cv_analysis' in result:
+                        cv_data = result['cv_analysis']
                         logger.info("🤖 Gemini Insights:")
-                        logger.info(f"   Building Type: {gemini_data.get('building_type_detected', 'N/A')}")
-                        logger.info(f"   Features: {gemini_data.get('architectural_features', [])}")
-                        logger.info(f"   Materials: {gemini_data.get('construction_materials', [])}")
-                        logger.info(f"   Age: {gemini_data.get('age_estimate', 'N/A')}")
-                        logger.info(f"   Condition: {gemini_data.get('condition_assessment', 'N/A')}")
+                        logger.info(f"   Building Type: {cv_data.get('building_type_detected', 'N/A')}")
+                        logger.info(f"   Features: {cv_data.get('architectural_features', [])}")
+                        logger.info(f"   Materials: {cv_data.get('construction_materials', [])}")
+                        logger.info(f"   Age: {cv_data.get('age_estimate', 'N/A')}")
+                        logger.info(f"   Condition: {cv_data.get('condition_assessment', 'N/A')}")
                     
                     return True
                 else:
@@ -169,11 +169,11 @@ def main():
         logger.info("💡 Please set your Gemini API key in the .env file")
         return False
     
-    logger.info("✅ Gemini API key found")
+    logger.info("✅ CV Model API key found")
     
     # Test 1: Basic functionality with test image
     logger.info("\n🧪 Test 1: Basic functionality with test image")
-    test1_success = test_gemini_analyzer()
+    test1_success = test_cv_analyzer()
     
     # Test 2: Real image test (if available)
     logger.info("\n🧪 Test 2: Real image analysis")
@@ -185,7 +185,7 @@ def main():
     logger.info(f"   Test 2 (Real Image): {'✅ PASSED' if test2_success else '❌ FAILED'}")
     
     if test1_success or test2_success:
-        logger.info("🎉 Gemini Building Analyzer is working!")
+        logger.info("🎉 CV Building Analyzer is working!")
         return True
     else:
         logger.error("❌ All tests failed")

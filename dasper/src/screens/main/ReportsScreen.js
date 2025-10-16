@@ -277,15 +277,15 @@ const ReportsScreen = ({ navigation }) => {
         </Animatable.View>
       </LinearGradient>
 
-      {/* Filters and Sort */}
-      <View style={styles.filtersContainer}>
+     {/* Filters and Sort */}
+    {/*}  <View style={styles.filtersContainer}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filtersContent}
         >
-          {/* Sort Options */}
-          <View style={styles.filterGroup}>
+         {/*{/* Sort Options */}
+         {/* <View style={styles.filterGroup}>
             <Text style={styles.filterGroupLabel}>Sort by:</Text>
             {sortOptions.map((option) => (
               <TouchableOpacity
@@ -311,9 +311,8 @@ const ReportsScreen = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </View>
-
           {/* Filter Options */}
-          <View style={styles.filterGroup}>
+          {/* <View style={styles.filterGroup}>
             <Text style={styles.filterGroupLabel}>Filter:</Text>
             {filterOptions.map((option) => (
               <TouchableOpacity
@@ -337,8 +336,8 @@ const ReportsScreen = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </View>
-        </ScrollView>
-      </View>
+        </ScrollView> */}
+      {/*</View>*/}
 
       {/* Content */}
       <ScrollView

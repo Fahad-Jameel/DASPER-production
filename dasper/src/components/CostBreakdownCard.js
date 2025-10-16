@@ -8,12 +8,14 @@ const CostBreakdownCard = ({ costData }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const formatCurrency = (amount) => {
-    if (amount >= 1000000) {
-      return `$${(amount / 1000000).toFixed(1)}M`;
+    if (amount >= 10000000) {
+      return `PKR ${(amount / 10000000).toFixed(1)}Cr`;
+    } else if (amount >= 100000) {
+      return `PKR ${(amount / 100000).toFixed(1)}L`;
     } else if (amount >= 1000) {
-      return `$${(amount / 1000).toFixed(0)}K`;
+      return `PKR ${(amount / 1000).toFixed(0)}K`;
     }
-    return `$${amount.toFixed(0)}`;
+    return `PKR ${amount.toFixed(0)}`;
   };
 
   const costItems = [
@@ -89,9 +91,9 @@ const CostBreakdownCard = ({ costData }) => {
     },
   ].filter(item => item.amount > 0);
 
-  const totalCost = costData.total_estimated_cost_usd || 0;
-  const costRangeLow = costData.cost_range_low_usd || totalCost * 0.85;
-  const costRangeHigh = costData.cost_range_high_usd || totalCost * 1.15;
+  const totalCost = costData.total_estimated_cost_pkr || 0;
+  const costRangeLow = costData.cost_range_low_pkr || totalCost * 0.85;
+  const costRangeHigh = costData.cost_range_high_pkr || totalCost * 1.15;
 
   return (
     <View style={styles.container}>
