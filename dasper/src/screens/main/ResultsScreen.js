@@ -398,13 +398,13 @@ const ResultsScreen = ({ route, navigation }) => {
               <Text style={styles.metricLabel}>Repair Cost</Text>
             </View>
             
-            <View style={styles.metricCard}>
+            {/* <View style={styles.metricCard}>
               <Ionicons name="time" size={32} color={colors.warning} />
               <Text style={styles.metricValue}>
                 {cost_estimation?.repair_time_days || 0}
               </Text>
               <Text style={styles.metricLabel}>Days to Repair</Text>
-            </View>
+            </View> */}
           </View>
         </Animatable.View>
 
@@ -468,7 +468,7 @@ const ResultsScreen = ({ route, navigation }) => {
         </Animatable.View>
 
         {/* AI Analysis */}
-        {ai_analysis && ai_analysis.description && (
+        {/* {ai_analysis && ai_analysis.description && (
           <Animatable.View
             animation="fadeInUp"
             delay={1300}
@@ -489,71 +489,71 @@ const ResultsScreen = ({ route, navigation }) => {
               </Text>
 
               {/* Building Type Detection */}
-              {ai_analysis.building_type_detected && (
+              {/* {ai_analysis.building_type_detected && (
                 <View style={styles.insightSection}>
                   <Text style={styles.insightTitle}>🏢 Building Type Detected:</Text>
                   <Text style={styles.insightText}>{ai_analysis.building_type_detected}</Text>
                 </View>
-              )}
+              )} */}
 
               {/* Architectural Features */}
-              {ai_analysis.architectural_features && ai_analysis.architectural_features.length > 0 && (
+              {/* {ai_analysis.architectural_features && ai_analysis.architectural_features.length > 0 && (
                 <View style={styles.insightSection}>
                   <Text style={styles.insightTitle}>🏗️ Architectural Features:</Text>
                   {ai_analysis.architectural_features.map((feature, index) => (
                     <Text key={index} style={styles.insightText}>• {feature}</Text>
                   ))}
                 </View>
-              )}
+              )} */}
 
               {/* Construction Materials */}
-              {ai_analysis.construction_materials && ai_analysis.construction_materials.length > 0 && (
+              {/* {ai_analysis.construction_materials && ai_analysis.construction_materials.length > 0 && (
                 <View style={styles.insightSection}>
                   <Text style={styles.insightTitle}>🧱 Construction Materials:</Text>
                   {ai_analysis.construction_materials.map((material, index) => (
                     <Text key={index} style={styles.insightText}>• {material}</Text>
                   ))}
                 </View>
-              )}
+              )} */}
 
               {/* Age Estimate */}
-              {ai_analysis.age_estimate && ai_analysis.age_estimate !== 'unknown' && (
+              {/* {ai_analysis.age_estimate && ai_analysis.age_estimate !== 'unknown' && (
                 <View style={styles.insightSection}>
                   <Text style={styles.insightTitle}>📅 Age Estimate:</Text>
                   <Text style={styles.insightText}>{ai_analysis.age_estimate}</Text>
                 </View>
-              )}
+              )} */}
 
               {/* Condition Assessment */}
-              {ai_analysis.condition_assessment && ai_analysis.condition_assessment !== 'unknown' && (
+              {/* {ai_analysis.condition_assessment && ai_analysis.condition_assessment !== 'unknown' && (
                 <View style={styles.insightSection}>
                   <Text style={styles.insightTitle}>🔍 Condition Assessment:</Text>
                   <Text style={styles.insightText}>{ai_analysis.condition_assessment}</Text>
                 </View>
-              )}
+              )} */}
 
               {/* Reference Objects */}
-              {ai_analysis.reference_objects && ai_analysis.reference_objects.length > 0 && (
+              {/* {ai_analysis.reference_objects && ai_analysis.reference_objects.length > 0 && (
                 <View style={styles.insightSection}>
                   <Text style={styles.insightTitle}>📏 Reference Objects:</Text>
                   {ai_analysis.reference_objects.map((obj, index) => (
                     <Text key={index} style={styles.insightText}>• {obj}</Text>
                   ))}
                 </View>
-              )}
+              )} */}
 
               {/* Limitations */}
-              {ai_analysis.limitations && ai_analysis.limitations.length > 0 && (
+              {/* {ai_analysis.limitations && ai_analysis.limitations.length > 0 && (
                 <View style={styles.insightSection}>
                   <Text style={styles.insightTitle}>⚠️ Analysis Limitations:</Text>
                   {ai_analysis.limitations.map((limitation, index) => (
                     <Text key={index} style={styles.insightText}>• {limitation}</Text>
                   ))}
                 </View>
-              )}
+              )} */}
 
               {/* Regional Cost Analysis */}
-              {ai_analysis.regional_costs && Object.keys(ai_analysis.regional_costs).length > 0 && (
+              {/* {ai_analysis.regional_costs && Object.keys(ai_analysis.regional_costs).length > 0 && (
                 <View style={styles.insightSection}>
                   <Text style={styles.insightTitle}>💰 Regional Cost Analysis:</Text>
                   <Text style={styles.insightText}>📍 Location: {ai_analysis.regional_costs.location || 'Pakistan'}</Text>
@@ -565,10 +565,10 @@ const ResultsScreen = ({ route, navigation }) => {
                     <Text style={styles.insightText}>📝 {ai_analysis.regional_costs.research_notes}</Text>
                   )}
                 </View>
-              )}
+              )} */}
 
               {/* Repair Time Estimate */}
-              {ai_analysis.repair_time_estimate && Object.keys(ai_analysis.repair_time_estimate).length > 0 && (
+              {/* {ai_analysis.repair_time_estimate && Object.keys(ai_analysis.repair_time_estimate).length > 0 && (
                 <View style={styles.insightSection}>
                   <Text style={styles.insightTitle}>⏱️ Repair Time Estimate:</Text>
                   <Text style={styles.insightText}>📅 Total Time: {ai_analysis.repair_time_estimate.estimated_days || 'N/A'} days</Text>
@@ -616,7 +616,7 @@ const ResultsScreen = ({ route, navigation }) => {
               )}
             </View>
           </Animatable.View>
-        )}
+        )} */} 
 
         {/* Action Buttons */}
         <Animatable.View

@@ -18,7 +18,9 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow DASPER to use your location to identify damage sites."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser"
     ],
     "ios": {
       "supportsTablet": true

@@ -102,13 +102,16 @@ class EnhancedBuildingAnalyzer:
             
             # Estimate height using multiple methods
             height_result = self._estimate_building_height(image, building_type, region_type)
+            logger.info(f"🔍 Enhanced Analyzer Height Result: {height_result}")
             
             # Estimate area using multiple methods
             area_result = self._estimate_building_area(image, building_type, region_type, 
                                                      use_satellite, pin_location)
+            logger.info(f"🔍 Enhanced Analyzer Area Result: {area_result}")
             
             # Calculate volume
             volume = height_result['estimated_height_m'] * area_result['estimated_area_sqm']
+            logger.info(f"🔍 Enhanced Analyzer Volume: {volume}")
             
             # Calculate confidence based on individual estimates
             overall_confidence = (height_result['confidence'] + area_result['confidence']) / 2

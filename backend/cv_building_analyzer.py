@@ -114,29 +114,37 @@ class CVBuildingAnalyzer:
             # Analyze with CV Model
             cv_analysis = self._analyze_with_cv_vision(image, building_type, region_type, pin_location)
             
+            # Debug logging
+            logger.info(f"🔍 CV Analysis Results: {cv_analysis}")
+            logger.info(f"🔍 Raw height estimate: {cv_analysis.get('height_estimate', 0)}")
+            logger.info(f"🔍 Raw area estimate: {cv_analysis.get('area_estimate', 0)}")
+            
             # Validate and refine estimates
             validated_height = self._validate_height_estimate(
-                gemini_analysis.get('height_estimate', 0),
+                cv_analysis.get('height_estimate', 0),
                 building_type, region_type
             )
             
             validated_area = self._validate_area_estimate(
-                gemini_analysis.get('area_estimate', 0),
+                cv_analysis.get('area_estimate', 0),
                 building_type, region_type
             )
+            
+            logger.info(f"🔍 Validated height: {validated_height}")
+            logger.info(f"🔍 Validated area: {validated_area}")
             
             # Calculate volume
             volume = validated_height * validated_area
             
             # Calculate confidence based on CV Model analysis quality
-            confidence = self._calculate_confidence(gemini_analysis, validated_height, validated_area)
+            confidence = self._calculate_confidence(cv_analysis, validated_height, validated_area)
             
             return {
                 'height_analysis': {
                     'estimated_height_m': round(float(validated_height), 2),
                     'confidence': round(float(confidence), 3),
                     'method': 'cv_model_analysis',
-                    'cv_insights': gemini_analysis.get('height_insights', ''),
+                    'cv_insights': cv_analysis.get('height_insights', ''),
                     'bounds': {
                         'min': 0.5,  # Minimal realistic height
                         'max': 1000.0,  # Maximum realistic height
@@ -147,7 +155,7 @@ class CVBuildingAnalyzer:
                     'estimated_area_sqm': round(float(validated_area), 2),
                     'confidence': round(float(confidence), 3),
                     'method': 'cv_model_analysis',
-                    'cv_insights': gemini_analysis.get('area_insights', ''),
+                    'cv_insights': cv_analysis.get('area_insights', ''),
                     'satellite_used': False
                 },
                 'volume_analysis': {
@@ -156,12 +164,12 @@ class CVBuildingAnalyzer:
                     'area_sqm': float(validated_area),
                     'confidence': round(float(confidence), 3)
                 },
-                'gemini_analysis': {
-                    'building_type_detected': gemini_analysis.get('building_type_detected', building_type),
-                    'architectural_features': gemini_analysis.get('architectural_features', []),
-                    'construction_materials': gemini_analysis.get('construction_materials', []),
-                    'age_estimate': gemini_analysis.get('age_estimate', 'unknown'),
-                    'condition_assessment': gemini_analysis.get('condition_assessment', 'unknown')
+                'cv_analysis': {
+                    'building_type_detected': cv_analysis.get('building_type_detected', building_type),
+                    'architectural_features': cv_analysis.get('architectural_features', []),
+                    'construction_materials': cv_analysis.get('construction_materials', []),
+                    'age_estimate': cv_analysis.get('age_estimate', 'unknown'),
+                    'condition_assessment': cv_analysis.get('condition_assessment', 'unknown')
                 },
                 'building_type': building_type,
                 'region_type': region_type,
@@ -175,8 +183,9 @@ class CVBuildingAnalyzer:
     def _analyze_with_cv_vision(self, image, building_type, region_type, pin_location):
         """Analyze building using CV Model"""
         try:
+            logger.info(f"🔍 CV Model status: initialized={self.initialized}, model={self.cv_model is not None}")
             if not self.cv_model:
-                logger.warning("CV model not available, using fallback")
+                logger.warning("⚠️ CV model not available, using fallback")
                 return self._get_fallback_gemini_analysis()
             
             # Prepare the prompt for CV Model
@@ -197,10 +206,10 @@ class CVBuildingAnalyzer:
             ])
             
             # Parse CV Model response
-            gemini_analysis = self._parse_gemini_response(response.text)
+            cv_analysis = self._parse_gemini_response(response.text)
             
-            logger.info(f"✅ CV Model analysis completed: {gemini_analysis}")
-            return gemini_analysis
+            logger.info(f"✅ CV Model analysis completed: {cv_analysis}")
+            return cv_analysis
             
         except Exception as e:
             logger.error(f"CV Model API error: {e}")
@@ -356,19 +365,25 @@ Be precise and realistic in your estimates. Consider the context of {region_type
     def _validate_height_estimate(self, height_estimate, building_type, region_type):
         """Validate height estimate - NO LIMITS, trust Gemini's analysis"""
         try:
+            logger.info(f"🔍 Validating height estimate: {height_estimate}")
+            
             # If estimate is 0 or invalid, use a reasonable default
             if height_estimate <= 0:
                 defaults = self._get_height_defaults(building_type, region_type)
+                logger.warning(f"⚠️ Height estimate is 0 or invalid, using default: {defaults['avg']}")
                 return defaults['avg']
             
             # NO BOUNDS - Trust Gemini's analysis completely
             # Only apply minimal validation for obviously wrong values
             if height_estimate < 0.5:  # Less than 0.5m is unrealistic
+                logger.warning(f"⚠️ Height estimate too low ({height_estimate}), using minimum: 2.0")
                 return 2.0  # Minimum realistic height
             elif height_estimate > 1000:  # More than 1000m is unrealistic
+                logger.warning(f"⚠️ Height estimate too high ({height_estimate}), using maximum: 100.0")
                 return 100.0  # Maximum realistic height
             
             # Return Gemini's estimate as-is
+            logger.info(f"✅ Using CV model height estimate: {height_estimate}")
             return height_estimate
             
         except Exception as e:
@@ -379,19 +394,25 @@ Be precise and realistic in your estimates. Consider the context of {region_type
     def _validate_area_estimate(self, area_estimate, building_type, region_type):
         """Validate area estimate - NO LIMITS, trust Gemini's analysis"""
         try:
+            logger.info(f"🔍 Validating area estimate: {area_estimate}")
+            
             # If estimate is 0 or invalid, use a reasonable default
             if area_estimate <= 0:
                 defaults = self._get_area_defaults(building_type, region_type)
+                logger.warning(f"⚠️ Area estimate is 0 or invalid, using default: {defaults['avg']}")
                 return defaults['avg']
             
             # NO BOUNDS - Trust Gemini's analysis completely
             # Only apply minimal validation for obviously wrong values
             if area_estimate < 1:  # Less than 1 sqm is unrealistic
+                logger.warning(f"⚠️ Area estimate too low ({area_estimate}), using minimum: 50.0")
                 return 50.0  # Minimum realistic area
             elif area_estimate > 100000:  # More than 100,000 sqm is unrealistic
+                logger.warning(f"⚠️ Area estimate too high ({area_estimate}), using maximum: 10000.0")
                 return 10000.0  # Maximum realistic area
             
             # Return Gemini's estimate as-is
+            logger.info(f"✅ Using CV model area estimate: {area_estimate}")
             return area_estimate
             
         except Exception as e:
@@ -399,22 +420,22 @@ Be precise and realistic in your estimates. Consider the context of {region_type
             defaults = self._get_area_defaults(building_type, region_type)
             return defaults['avg']
     
-    def _calculate_confidence(self, gemini_analysis, height, area):
-        """Calculate overall confidence based on Gemini analysis"""
+    def _calculate_confidence(self, cv_analysis, height, area):
+        """Calculate overall confidence based on CV analysis"""
         try:
-            base_confidence = (gemini_analysis.get('height_confidence', 0.5) + 
-                             gemini_analysis.get('area_confidence', 0.5)) / 2
+            base_confidence = (cv_analysis.get('height_confidence', 0.5) + 
+                             cv_analysis.get('area_confidence', 0.5)) / 2
             
             # Boost confidence if reference objects were identified
-            if gemini_analysis.get('reference_objects'):
+            if cv_analysis.get('reference_objects'):
                 base_confidence += 0.1
             
             # Reduce confidence if limitations were noted
-            if gemini_analysis.get('limitations'):
+            if cv_analysis.get('limitations'):
                 base_confidence -= 0.1
             
             # Boost confidence if architectural features were identified
-            if gemini_analysis.get('architectural_features'):
+            if cv_analysis.get('architectural_features'):
                 base_confidence += 0.05
             
             return max(0.3, min(0.95, base_confidence))
@@ -496,7 +517,7 @@ Be precise and realistic in your estimates. Consider the context of {region_type
                 'estimated_height_m': float(height),
                 'confidence': 0.3,
                 'method': 'fallback_defaults',
-                'gemini_insights': 'Analysis failed, using defaults',
+                'cv_insights': 'Analysis failed, using defaults',
                 'bounds': {
                     'min': float(height_defaults['min']),
                     'max': float(height_defaults['max'])
@@ -506,7 +527,7 @@ Be precise and realistic in your estimates. Consider the context of {region_type
                 'estimated_area_sqm': float(area),
                 'confidence': 0.3,
                 'method': 'fallback_defaults',
-                'gemini_insights': 'Analysis failed, using defaults',
+                'cv_insights': 'Analysis failed, using defaults',
                 'satellite_used': False
             },
             'volume_analysis': {
@@ -515,7 +536,7 @@ Be precise and realistic in your estimates. Consider the context of {region_type
                 'area_sqm': float(area),
                 'confidence': 0.3
             },
-            'gemini_analysis': {
+            'cv_analysis': {
                 'building_type_detected': building_type,
                 'architectural_features': [],
                 'construction_materials': [],
