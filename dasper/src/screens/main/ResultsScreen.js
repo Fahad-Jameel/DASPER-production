@@ -175,7 +175,7 @@ const ResultsScreen = ({ route, navigation }) => {
           
           <div class="section">
             <h3>Cost Estimation</h3>
-            <p><strong>Total Cost:</strong> $${(cost_estimation?.total_estimated_cost_usd || 0).toLocaleString()}</p>
+            <p><strong>Total Cost:</strong> PKR {(cost_estimation?.total_estimated_cost_pkr || 0).toLocaleString()}</p>
             <p><strong>Repair Time:</strong> ${cost_estimation?.repair_time_days || 0} days</p>
           </div>
           
@@ -234,8 +234,8 @@ const ResultsScreen = ({ route, navigation }) => {
   };
   
   const cost_estimation = {
-    total_estimated_cost_usd: assessmentData.estimated_cost || 0,
-    repair_time_days: 8, // Default based on minimal damage level
+    total_estimated_cost_pkr: assessmentData.estimated_cost || 0,
+    repair_time_days: assessmentData.repair_time_days || 8, // Use actual repair time from assessment
     ...assessmentData.cost_breakdown
   };
   
@@ -251,15 +251,29 @@ const ResultsScreen = ({ route, navigation }) => {
     original: assessmentData.original_image_url
   };
 
-  // AI Analysis - use recommendations from API or create fallback
+  // AI Analysis - use CV Model insights from API or create fallback
   const ai_analysis = {
-    description: assessmentData.recommendations?.length > 0 
-      ? assessmentData.recommendations.join('. ') 
-      : `Based on AI analysis, this building shows ${damage_assessment.severity_category} damage with a severity score of ${(damage_assessment.severity_score * 100).toFixed(1)}%. The estimated repair cost is $${cost_estimation.total_estimated_cost_usd?.toLocaleString() || '0'}.`,
+    description: assessmentData.cv_insights?.height_insights 
+      ? `Height Analysis: ${assessmentData.cv_insights.height_insights}\n\nArea Analysis: ${assessmentData.cv_insights.area_insights}`
+      : assessmentData.recommendations?.length > 0 
+        ? assessmentData.recommendations.join('. ') 
+        : `Based on AI analysis, this building shows ${damage_assessment.severity_category} damage with a severity score of ${(damage_assessment.severity_score * 100).toFixed(1)}%. The estimated repair cost is PKR ${cost_estimation.total_estimated_cost_pkr?.toLocaleString() || '0'}.`,
     repair_priorities: assessmentData.recommendations || [],
     safety_concerns: damage_assessment.severity_category === 'severe' || damage_assessment.severity_category === 'destructive' 
       ? ['Structural integrity assessment needed', 'Professional inspection required'] 
-      : []
+      : [],
+    // CV Model detailed analysis
+    cv_insights: assessmentData.cv_insights || {},
+    building_type_detected: assessmentData.cv_insights?.building_type_detected || assessmentData.building_type,
+    architectural_features: assessmentData.cv_insights?.architectural_features || [],
+    construction_materials: assessmentData.cv_insights?.construction_materials || [],
+    age_estimate: assessmentData.cv_insights?.age_estimate || 'unknown',
+    condition_assessment: assessmentData.cv_insights?.condition_assessment || 'unknown',
+    reference_objects: assessmentData.cv_insights?.reference_objects || [],
+    limitations: assessmentData.cv_insights?.limitations || [],
+    // Regional cost and repair time data
+    regional_costs: assessmentData.regional_costs || {},
+    repair_time_estimate: assessmentData.repair_time_estimate || {}
   };
 
   return (
@@ -379,18 +393,18 @@ const ResultsScreen = ({ route, navigation }) => {
             <View style={styles.metricCard}>
               <Ionicons name="cash" size={32} color={colors.accent} />
               <Text style={styles.metricValue}>
-                ${cost_estimation?.total_estimated_cost_usd?.toLocaleString() || '0'}
+                PKR {cost_estimation?.total_estimated_cost_pkr?.toLocaleString() || '0'}
               </Text>
               <Text style={styles.metricLabel}>Repair Cost</Text>
             </View>
             
-            <View style={styles.metricCard}>
+            {/* <View style={styles.metricCard}>
               <Ionicons name="time" size={32} color={colors.warning} />
               <Text style={styles.metricValue}>
                 {cost_estimation?.repair_time_days || 0}
               </Text>
               <Text style={styles.metricLabel}>Days to Repair</Text>
-            </View>
+            </View> */}
           </View>
         </Animatable.View>
 
@@ -454,14 +468,14 @@ const ResultsScreen = ({ route, navigation }) => {
         </Animatable.View>
 
         {/* AI Analysis */}
-        {ai_analysis && ai_analysis.description && (
+        {/* {ai_analysis && ai_analysis.description && (
           <Animatable.View
             animation="fadeInUp"
             delay={1300}
             style={styles.section}
           >
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              AI Analysis Report
+              🤖 CV Model Analysis Report
             </Text>
             
             <View style={styles.aiAnalysisCard}>
@@ -473,6 +487,112 @@ const ResultsScreen = ({ route, navigation }) => {
               <Text style={styles.aiAnalysisText}>
                 {ai_analysis.description}
               </Text>
+
+              {/* Building Type Detection */}
+              {/* {ai_analysis.building_type_detected && (
+                <View style={styles.insightSection}>
+                  <Text style={styles.insightTitle}>🏢 Building Type Detected:</Text>
+                  <Text style={styles.insightText}>{ai_analysis.building_type_detected}</Text>
+                </View>
+              )} */}
+
+              {/* Architectural Features */}
+              {/* {ai_analysis.architectural_features && ai_analysis.architectural_features.length > 0 && (
+                <View style={styles.insightSection}>
+                  <Text style={styles.insightTitle}>🏗️ Architectural Features:</Text>
+                  {ai_analysis.architectural_features.map((feature, index) => (
+                    <Text key={index} style={styles.insightText}>• {feature}</Text>
+                  ))}
+                </View>
+              )} */}
+
+              {/* Construction Materials */}
+              {/* {ai_analysis.construction_materials && ai_analysis.construction_materials.length > 0 && (
+                <View style={styles.insightSection}>
+                  <Text style={styles.insightTitle}>🧱 Construction Materials:</Text>
+                  {ai_analysis.construction_materials.map((material, index) => (
+                    <Text key={index} style={styles.insightText}>• {material}</Text>
+                  ))}
+                </View>
+              )} */}
+
+              {/* Age Estimate */}
+              {/* {ai_analysis.age_estimate && ai_analysis.age_estimate !== 'unknown' && (
+                <View style={styles.insightSection}>
+                  <Text style={styles.insightTitle}>📅 Age Estimate:</Text>
+                  <Text style={styles.insightText}>{ai_analysis.age_estimate}</Text>
+                </View>
+              )} */}
+
+              {/* Condition Assessment */}
+              {/* {ai_analysis.condition_assessment && ai_analysis.condition_assessment !== 'unknown' && (
+                <View style={styles.insightSection}>
+                  <Text style={styles.insightTitle}>🔍 Condition Assessment:</Text>
+                  <Text style={styles.insightText}>{ai_analysis.condition_assessment}</Text>
+                </View>
+              )} */}
+
+              {/* Reference Objects */}
+              {/* {ai_analysis.reference_objects && ai_analysis.reference_objects.length > 0 && (
+                <View style={styles.insightSection}>
+                  <Text style={styles.insightTitle}>📏 Reference Objects:</Text>
+                  {ai_analysis.reference_objects.map((obj, index) => (
+                    <Text key={index} style={styles.insightText}>• {obj}</Text>
+                  ))}
+                </View>
+              )} */}
+
+              {/* Limitations */}
+              {/* {ai_analysis.limitations && ai_analysis.limitations.length > 0 && (
+                <View style={styles.insightSection}>
+                  <Text style={styles.insightTitle}>⚠️ Analysis Limitations:</Text>
+                  {ai_analysis.limitations.map((limitation, index) => (
+                    <Text key={index} style={styles.insightText}>• {limitation}</Text>
+                  ))}
+                </View>
+              )} */}
+
+              {/* Regional Cost Analysis */}
+              {/* {ai_analysis.regional_costs && Object.keys(ai_analysis.regional_costs).length > 0 && (
+                <View style={styles.insightSection}>
+                  <Text style={styles.insightTitle}>💰 Regional Cost Analysis:</Text>
+                  <Text style={styles.insightText}>📍 Location: {ai_analysis.regional_costs.location || 'Pakistan'}</Text>
+                  <Text style={styles.insightText}>👷 Labor Cost: PKR {ai_analysis.regional_costs.labor_cost_per_day_pkr?.toLocaleString() || 'N/A'} per day</Text>
+                  <Text style={styles.insightText}>🧱 Material Cost: PKR {ai_analysis.regional_costs.material_cost_per_sqm_pkr?.toLocaleString() || 'N/A'} per sqm</Text>
+                  <Text style={styles.insightText}>🔧 Equipment Cost: PKR {ai_analysis.regional_costs.equipment_cost_per_day_pkr?.toLocaleString() || 'N/A'} per day</Text>
+                  <Text style={styles.insightText}>📊 Regional Multiplier: {ai_analysis.regional_costs.regional_multiplier || '1.0'}x</Text>
+                  {ai_analysis.regional_costs.research_notes && (
+                    <Text style={styles.insightText}>📝 {ai_analysis.regional_costs.research_notes}</Text>
+                  )}
+                </View>
+              )} */}
+
+              {/* Repair Time Estimate */}
+              {/* {ai_analysis.repair_time_estimate && Object.keys(ai_analysis.repair_time_estimate).length > 0 && (
+                <View style={styles.insightSection}>
+                  <Text style={styles.insightTitle}>⏱️ Repair Time Estimate:</Text>
+                  <Text style={styles.insightText}>📅 Total Time: {ai_analysis.repair_time_estimate.estimated_days || 'N/A'} days</Text>
+                  {ai_analysis.repair_time_estimate.breakdown && (
+                    <View style={styles.breakdownContainer}>
+                      <Text style={styles.breakdownTitle}>Time Breakdown:</Text>
+                      {Object.entries(ai_analysis.repair_time_estimate.breakdown).map(([phase, days]) => (
+                        <Text key={phase} style={styles.insightText}>• {phase.replace(/_/g, ' ')}: {days} days</Text>
+                      ))}
+                    </View>
+                  )}
+                  {ai_analysis.repair_time_estimate.factors && ai_analysis.repair_time_estimate.factors.length > 0 && (
+                    <View style={styles.factorsContainer}>
+                      <Text style={styles.factorsTitle}>Key Factors:</Text>
+                      {ai_analysis.repair_time_estimate.factors.map((factor, index) => (
+                        <Text key={index} style={styles.insightText}>• {factor}</Text>
+                      ))}
+                    </View>
+                  )}
+                  {ai_analysis.repair_time_estimate.confidence && (
+                    <Text style={styles.insightText}>🎯 Confidence: {(ai_analysis.repair_time_estimate.confidence * 100).toFixed(0)}%</Text>
+                  )}
+                </View>
+              )}
               
               {ai_analysis.repair_priorities && ai_analysis.repair_priorities.length > 0 && (
                 <View style={styles.prioritiesContainer}>
@@ -496,7 +616,7 @@ const ResultsScreen = ({ route, navigation }) => {
               )}
             </View>
           </Animatable.View>
-        )}
+        )} */} 
 
         {/* Action Buttons */}
         <Animatable.View
@@ -768,6 +888,45 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
     marginBottom: spacing.lg,
+  },
+  insightSection: {
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  insightTitle: {
+    ...typography.body1,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  insightText: {
+    ...typography.body2,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  breakdownContainer: {
+    marginTop: spacing.xs,
+    paddingLeft: spacing.sm,
+  },
+  breakdownTitle: {
+    ...typography.body1,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  factorsContainer: {
+    marginTop: spacing.xs,
+    paddingLeft: spacing.sm,
+  },
+  factorsTitle: {
+    ...typography.body1,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
   },
   prioritiesContainer: {
     marginBottom: spacing.lg,

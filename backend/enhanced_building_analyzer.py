@@ -102,13 +102,16 @@ class EnhancedBuildingAnalyzer:
             
             # Estimate height using multiple methods
             height_result = self._estimate_building_height(image, building_type, region_type)
+            logger.info(f"🔍 Enhanced Analyzer Height Result: {height_result}")
             
             # Estimate area using multiple methods
             area_result = self._estimate_building_area(image, building_type, region_type, 
                                                      use_satellite, pin_location)
+            logger.info(f"🔍 Enhanced Analyzer Area Result: {area_result}")
             
             # Calculate volume
             volume = height_result['estimated_height_m'] * area_result['estimated_area_sqm']
+            logger.info(f"🔍 Enhanced Analyzer Volume: {volume}")
             
             # Calculate confidence based on individual estimates
             overall_confidence = (height_result['confidence'] + area_result['confidence']) / 2
@@ -168,8 +171,12 @@ class EnhancedBuildingAnalyzer:
                 weighted_sum = sum(w * e for w, e in zip(weights[:len(estimates)], estimates))
                 estimated_height = weighted_sum / sum(weights[:len(estimates)])
                 
-                # Apply bounds
-                estimated_height = np.clip(estimated_height, defaults['min'], defaults['max'])
+                # NO BOUNDS - Trust the analysis completely
+                # Only apply minimal validation for obviously wrong values
+                if estimated_height < 0.5:  # Less than 0.5m is unrealistic
+                    estimated_height = 2.0  # Minimum realistic height
+                elif estimated_height > 1000:  # More than 1000m is unrealistic
+                    estimated_height = 100.0  # Maximum realistic height
                 
                 # Calculate confidence
                 if len(estimates) > 1:
@@ -193,8 +200,9 @@ class EnhancedBuildingAnalyzer:
                 'confidence': round(float(confidence), 3),
                 'method': method,
                 'bounds': {
-                    'min': float(defaults['min']),
-                    'max': float(defaults['max'])
+                    'min': 0.5,  # Minimal realistic height
+                    'max': 1000.0,  # Maximum realistic height
+                    'note': 'No artificial limits applied - trusting analysis'
                 },
                 'individual_estimates': {
                     'depth_based': float(depth_height) if depth_height > 0 else 0.0,
@@ -213,8 +221,9 @@ class EnhancedBuildingAnalyzer:
                 'method': 'error_fallback',
                 'error': str(e),
                 'bounds': {
-                    'min': float(defaults['min']),
-                    'max': float(defaults['max'])
+                    'min': 0.5,  # Minimal realistic height
+                    'max': 1000.0,  # Maximum realistic height
+                    'note': 'No artificial limits applied - trusting analysis'
                 }
             }
     
@@ -472,11 +481,14 @@ class EnhancedBuildingAnalyzer:
                 logger.info(f"  Weights used: {weights[:len(estimates)]}")
                 logger.info(f"  Weighted estimate before bounds: {estimated_area} sqm")
                 
-                # Apply bounds
-                defaults = self._get_area_defaults(building_type, region_type)
-                estimated_area = np.clip(estimated_area, defaults['min'], defaults['max'])
+                # NO BOUNDS - Trust the analysis completely
+                # Only apply minimal validation for obviously wrong values
+                if estimated_area < 1:  # Less than 1 sqm is unrealistic
+                    estimated_area = 50.0  # Minimum realistic area
+                elif estimated_area > 100000:  # More than 100,000 sqm is unrealistic
+                    estimated_area = 10000.0  # Maximum realistic area
                 
-                logger.info(f"  Bounds applied: min={defaults['min']}, max={defaults['max']}")
+                logger.info(f"  No artificial bounds applied - trusting analysis")
                 
                 # Calculate confidence
                 if len(estimates) > 1:

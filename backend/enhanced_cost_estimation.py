@@ -139,6 +139,30 @@ class EnhancedRegionalCostEstimator:
             
             total_cost = subtotal + contingency
             
+            # Apply realistic cost limits based on damage severity
+            severity_category = self._get_severity_category(severity_score)
+            
+            # For minimal damage (severity <= 0.25 or under 10%), cap cost at 5 lakh PKR
+            if severity_score <= 0.25 or severity_score <= 0.10:
+                max_cost_minimal = 500000  # 5 lakh PKR
+                if total_cost > max_cost_minimal:
+                    logger.info(f"🔧 Applying minimal damage cost cap: {total_cost:,.2f} PKR -> {max_cost_minimal:,.2f} PKR")
+                    total_cost = max_cost_minimal
+                    # Adjust contingency proportionally
+                    contingency = max_cost_minimal - subtotal
+                    if contingency < 0:
+                        contingency = 0
+            
+            # For moderate damage, apply reasonable limits
+            elif severity_score <= 0.5:
+                max_cost_moderate = 2000000  # 20 lakh PKR
+                if total_cost > max_cost_moderate:
+                    logger.info(f"🔧 Applying moderate damage cost cap: {total_cost:,.2f} PKR -> {max_cost_moderate:,.2f} PKR")
+                    total_cost = max_cost_moderate
+                    contingency = max_cost_moderate - subtotal
+                    if contingency < 0:
+                        contingency = 0
+            
             # Calculate ranges
             cost_range_low = total_cost * (1 - uncertainty_factor)
             cost_range_high = total_cost * (1 + uncertainty_factor)

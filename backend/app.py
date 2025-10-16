@@ -70,6 +70,7 @@ try:
     from enhanced_cost_estimation import EnhancedRegionalCostEstimator
     from building_area_estimator import BuildingAreaEstimator
     from enhanced_building_analyzer import EnhancedBuildingAnalyzer
+    from cv_building_analyzer import CVBuildingAnalyzer
     from volume_based_cost_estimation import VolumeBasedCostEstimator
 except ImportError as e:
     print(f"Warning: Could not import modules: {e}")
@@ -77,6 +78,7 @@ except ImportError as e:
     EnhancedRegionalCostEstimator = None
     BuildingAreaEstimator = None
     EnhancedBuildingAnalyzer = None
+    CVBuildingAnalyzer = None
     VolumeBasedCostEstimator = None
 
 app = Flask(__name__)
@@ -240,8 +242,8 @@ def init_regional_indices():
     
     logger.info("✅ Regional indices initialized")
 
-def init_gemini():
-    """Initialize Gemini AI"""
+def init_cv_model():
+    """Initialize CV Model"""
     try:
         api_key = os.getenv('GEMINI_API_KEY')
         if not api_key:
@@ -385,8 +387,8 @@ def register():
         if db.users.find_one({'email': email}):
             return jsonify({'error': 'User already exists'}), 400
         
-        # Hash password
-        password_hash = generate_password_hash(password)
+        # Hash password using pbkdf2 (more compatible than scrypt)
+        password_hash = generate_password_hash(password, method='pbkdf2:sha256')
         
         # Create user
         user_data = {
@@ -430,7 +432,7 @@ def register():
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    """Login user"""
+    """Login user with improved password hash compatibility"""
     try:
         data = request.get_json()
         
@@ -442,7 +444,36 @@ def login():
         
         # Find user
         user = db.users.find_one({'email': email})
-        if not user or not check_password_hash(user['password_hash'], password):
+        if not user:
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+        # Check if user needs password reset (migrated from scrypt)
+        if user.get('password_reset_required', False):
+            return jsonify({
+                'error': 'Password reset required. Please use the "Forgot Password" feature.',
+                'reset_required': True
+            }), 401
+        
+        # Verify password with improved error handling
+        try:
+            password_valid = check_password_hash(user['password_hash'], password)
+        except Exception as hash_error:
+            logger.error(f"Password hash verification error for user {email}: {hash_error}")
+            
+            # If it's a scrypt error, mark user for password reset
+            if 'scrypt' in str(hash_error).lower():
+                db.users.update_one(
+                    {'_id': user['_id']},
+                    {'$set': {'password_reset_required': True}}
+                )
+                return jsonify({
+                    'error': 'Password reset required due to system update. Please use "Forgot Password".',
+                    'reset_required': True
+                }), 401
+            else:
+                return jsonify({'error': 'Invalid credentials'}), 401
+        
+        if not password_valid:
             return jsonify({'error': 'Invalid credentials'}), 401
         
         if not user.get('is_active', True):
@@ -593,6 +624,46 @@ def update_profile():
         
     except Exception as e:
         logger.error(f"Profile update error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password():
+    """Reset user password (for users with scrypt hashes)"""
+    try:
+        data = request.get_json()
+        email = data.get('email', '').lower()
+        new_password = data.get('new_password', '')
+        
+        if not email or not new_password:
+            return jsonify({'error': 'Email and new password required'}), 400
+        
+        # Find user
+        user = db.users.find_one({'email': email})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Hash new password using pbkdf2
+        new_password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+        
+        # Update user's password and remove reset requirement
+        db.users.update_one(
+            {'_id': user['_id']},
+            {
+                '$set': {
+                    'password_hash': new_password_hash,
+                    'password_reset_required': False,
+                    'updated_at': datetime.utcnow()
+                },
+                '$unset': {
+                    'migration_note': ''
+                }
+            }
+        )
+        
+        return jsonify({'message': 'Password reset successfully'})
+        
+    except Exception as e:
+        logger.error(f"Password reset error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # DISASTER ALERTS ENDPOINTS
@@ -1105,11 +1176,29 @@ def assess_damage():
                     volume_cost_estimator = models['volume_cost_estimator']
                     
                     logger.info("🏗️ Starting enhanced building analysis (height + area)")
-                    # Enhanced building analysis with height and area estimation
-                    building_analysis = building_analyzer.analyze_building(
-                        image, building_type, pin_location, 
-                        use_satellite=True, pin_location=pin_location
-                    )
+                    # Try CV Model-powered analysis first, fallback to traditional
+                    cv_analyzer = models.get('cv_building_analyzer')
+                    logger.info(f"🔍 CV analyzer available: {cv_analyzer is not None}")
+                    if cv_analyzer:
+                        logger.info(f"🔍 CV analyzer initialized: {cv_analyzer.initialized}")
+                        logger.info(f"🔍 CV model available: {cv_analyzer.cv_model is not None}")
+                        if cv_analyzer.initialized and cv_analyzer.cv_model:
+                            logger.info("🤖 Using CV Model for building analysis")
+                            building_analysis = cv_analyzer.analyze_building_with_cv_model(
+                                image, building_type, pin_location, pin_location
+                            )
+                        else:
+                            logger.warning("⚠️ CV analyzer not properly initialized, using traditional analysis")
+                            building_analysis = building_analyzer.analyze_building(
+                                image, building_type, pin_location, 
+                                use_satellite=True, pin_location=pin_location
+                            )
+                    else:
+                        logger.info("📐 Using traditional building analysis (CV Model not available)")
+                        building_analysis = building_analyzer.analyze_building(
+                            image, building_type, pin_location, 
+                            use_satellite=True, pin_location=pin_location
+                        )
                     
                     building_area = building_analysis['area_analysis']['estimated_area_sqm']
                     building_height = building_analysis['height_analysis']['estimated_height_m']
@@ -1121,8 +1210,12 @@ def assess_damage():
                     # Perform damage assessment
                     damage_results = pipeline.predict_damage_severity(image_path)
                     
-                    logger.info("💰 Starting volume-based cost estimation")
-                    # Use volume-based cost estimation
+                    logger.info("💰 Starting volume-based cost estimation with regional data")
+                    # Get regional costs and repair time from CV Model analysis
+                    regional_costs = building_analysis.get('regional_costs', {})
+                    repair_time_estimate = building_analysis.get('repair_time_estimate', {})
+                    
+                    # Use volume-based cost estimation with regional data
                     cost_results = volume_cost_estimator.calculate_repair_cost(
                         severity_score=damage_results['severity_score'],
                         damage_ratio=damage_results['severity_score'],
@@ -1142,7 +1235,9 @@ def assess_damage():
                         damage_types=damage_types,
                         confidence_score=damage_results['confidence'],
                         building_height_m=building_height,
-                        building_volume_cubic_m=building_volume
+                        building_volume_cubic_m=building_volume,
+                        regional_costs=regional_costs,
+                        repair_time_estimate=repair_time_estimate
                     )
                     
                     # Combine results
@@ -1154,8 +1249,8 @@ def assess_damage():
                             'severity_score': f"{damage_results['severity_score']:.3f}",
                             'severity_category': damage_results['severity_category'],
                             'confidence': f"{damage_results['confidence']:.2%}",
-                            'estimated_cost_usd': cost_results['total_estimated_cost_usd'],
-                            'cost_range': f"${cost_results['cost_range_low_usd']:,.2f} - ${cost_results['cost_range_high_usd']:,.2f}",
+                            'estimated_cost_pkr': cost_results['total_estimated_cost_pkr'],
+                            'cost_range': f"PKR {cost_results['cost_range_low_pkr']:,.2f} - PKR {cost_results['cost_range_high_pkr']:,.2f}",
                             'building_area_sqm': building_area,
                             'building_height_m': building_height,
                             'building_volume_cubic_m': building_volume,
@@ -1198,7 +1293,7 @@ def assess_damage():
                 'building_volume_cubic_m': building_volume,
                 'damage_severity': damage_assessment.get('severity_category', summary.get('severity_category', 'Unknown')),
                 'damage_percentage': round(damage_assessment.get('severity_score', 0) * 100, 1),
-                'estimated_cost': cost_estimation.get('total_estimated_cost_usd', summary.get('estimated_cost_usd', 0)),
+                'estimated_cost': cost_estimation.get('total_estimated_cost_pkr', summary.get('estimated_cost_pkr', 0)),
                 'confidence_score': damage_assessment.get('confidence', 0),
                 'calculation_method': cost_estimation.get('calculation_method', 'area_based'),
                 'assessment_details': {
@@ -1211,7 +1306,8 @@ def assess_damage():
                     'structural_cost': cost_estimation.get('structural_cost', 0),
                     'non_structural_cost': cost_estimation.get('non_structural_cost', 0),
                     'content_cost': cost_estimation.get('content_cost', 0),
-                    'total_cost_usd': cost_estimation.get('total_estimated_cost_usd', 0)
+                    'total_cost_pkr': cost_estimation.get('total_estimated_cost_pkr', 0),
+                    'repair_time_days': cost_estimation.get('repair_time_days', 0)
                 },
                 'building_dimensions': {
                     'area_sqm': building_area,
@@ -1238,7 +1334,7 @@ def assess_damage():
                 'message': 'Enhanced damage assessment completed successfully',
                 'damage_severity': damage_assessment.get('severity_category', summary.get('severity_category', 'Unknown')),
                 'damage_percentage': round(damage_assessment.get('severity_score', 0) * 100, 1),
-                'estimated_cost': cost_estimation.get('total_estimated_cost_usd', summary.get('estimated_cost_usd', 0)),
+                'estimated_cost': cost_estimation.get('total_estimated_cost_pkr', summary.get('estimated_cost_pkr', 0)),
                 'building_area_sqm': building_area,
                 'building_height_m': building_height,
                 'building_volume_cubic_m': building_volume,
@@ -1252,7 +1348,7 @@ def assess_damage():
                     'structural_cost': cost_estimation.get('structural_cost', 0),
                     'non_structural_cost': cost_estimation.get('non_structural_cost', 0),
                     'content_cost': cost_estimation.get('content_cost', 0),
-                    'total_cost_usd': cost_estimation.get('total_estimated_cost_usd', 0)
+                    'total_cost_pkr': cost_estimation.get('total_estimated_cost_pkr', 0)
                 },
                 'building_dimensions': {
                     'area_sqm': building_area,
@@ -1264,7 +1360,21 @@ def assess_damage():
                     'area_confidence': building_analysis['area_analysis']['confidence'],
                     'volume_confidence': building_analysis['volume_analysis']['confidence'],
                     'satellite_used': building_analysis['area_analysis'].get('satellite_used', False)
-                }
+                },
+                'cv_analysis': building_analysis.get('cv_analysis', {}),
+                'cv_insights': {
+                    'height_insights': building_analysis['height_analysis'].get('cv_insights', ''),
+                    'area_insights': building_analysis['area_analysis'].get('cv_insights', ''),
+                    'building_type_detected': building_analysis.get('cv_analysis', {}).get('building_type_detected', building_type),
+                    'architectural_features': building_analysis.get('cv_analysis', {}).get('architectural_features', []),
+                    'construction_materials': building_analysis.get('cv_analysis', {}).get('construction_materials', []),
+                    'age_estimate': building_analysis.get('cv_analysis', {}).get('age_estimate', 'unknown'),
+                    'condition_assessment': building_analysis.get('cv_analysis', {}).get('condition_assessment', 'unknown'),
+                    'reference_objects': building_analysis.get('cv_analysis', {}).get('reference_objects', []),
+                    'limitations': building_analysis.get('cv_analysis', {}).get('limitations', [])
+                },
+                'regional_costs': building_analysis.get('regional_costs', {}),
+                'repair_time_estimate': building_analysis.get('repair_time_estimate', {})
             }
             
             logger.info("Assessment completed successfully")
@@ -1496,7 +1606,7 @@ def generate_assessment_pdf(assessment):
             ['Non-Structural Cost:', f"{cost_results.get('non_structural_cost', 0):,.2f} {currency}"],
             ['Content Cost:', f"{cost_results.get('content_cost', 0):,.2f} {currency}"],
             ['Professional Fees:', f"{cost_results.get('professional_fees', 0):,.2f} {currency}"],
-            ['Total Estimated Cost:', f"{cost_results.get('total_estimated_cost_usd', 0):,.2f} USD"],
+            ['Total Estimated Cost:', f"PKR {cost_results.get('total_estimated_cost_pkr', 0):,.2f}"],
             ['Repair Time Estimate:', f"{cost_results.get('repair_time_days', 0)} days"]
         ]
         
@@ -2111,8 +2221,8 @@ if __name__ == '__main__':
     print("📊 Initializing database...")
     init_database()
     
-    print("🤖 Initializing Gemini AI...")
-    init_gemini()
+    print("🤖 Initializing CV Model...")
+    init_cv_model()
     
     print("🧠 Initializing model manager with lazy loading...")
     if not init_model_manager():
