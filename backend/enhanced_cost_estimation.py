@@ -13,36 +13,36 @@ class EnhancedRegionalCostEstimator:
     def __init__(self, db=None):
         self.db = db
         
-        # Base costs per sqm in USD (following DASPER framework)
+        # Base costs per sqm in PKR (realistic Pakistan construction costs)
         self.base_costs = {
             'residential': {
-                'structural': {'min': 100, 'max': 800},
-                'non_structural': {'min': 50, 'max': 400},
-                'content': {'min': 25, 'max': 200}
+                'structural': {'min': 5000, 'max': 15000},  # PKR per sqm
+                'non_structural': {'min': 2500, 'max': 7500},  # PKR per sqm
+                'content': {'min': 1000, 'max': 3000}  # PKR per sqm
             },
             'commercial': {
-                'structural': {'min': 150, 'max': 1200},
-                'non_structural': {'min': 75, 'max': 600},
-                'content': {'min': 40, 'max': 300}
+                'structural': {'min': 8000, 'max': 24000},  # PKR per sqm
+                'non_structural': {'min': 4000, 'max': 12000},  # PKR per sqm
+                'content': {'min': 2000, 'max': 6000}  # PKR per sqm
             },
             'industrial': {
-                'structural': {'min': 200, 'max': 1500},
-                'non_structural': {'min': 100, 'max': 750},
-                'content': {'min': 60, 'max': 400}
+                'structural': {'min': 6000, 'max': 18000},  # PKR per sqm
+                'non_structural': {'min': 3000, 'max': 9000},  # PKR per sqm
+                'content': {'min': 1500, 'max': 4500}  # PKR per sqm
             }
         }
         
-        # Damage type multipliers
+        # Damage type multipliers (reduced for more realistic costs)
         self.damage_multipliers = {
-            'structural': 1.3,
-            'flood': 1.2,
-            'fire': 1.4,
-            'earthquake': 1.5,
-            'wind': 1.1,
-            'settlement': 1.15,
-            'cracks': 1.05,
-            'water': 1.15,
-            'collapse': 1.6
+            'structural': 1.1,  # Reduced from 1.3
+            'flood': 1.1,       # Reduced from 1.2
+            'fire': 1.2,        # Reduced from 1.4
+            'earthquake': 1.3,  # Reduced from 1.5
+            'wind': 1.05,       # Reduced from 1.1
+            'settlement': 1.1,  # Reduced from 1.15
+            'cracks': 1.02,     # Reduced from 1.05
+            'water': 1.1,       # Reduced from 1.15
+            'collapse': 1.4     # Reduced from 1.6
         }
         
         # Time factors for repair
@@ -51,6 +51,21 @@ class EnhancedRegionalCostEstimator:
             'moderate': 30,
             'severe': 90,
             'destructive': 180
+        }
+        
+        # Regional cost factors based on Pakistan construction market research
+        self.regional_cost_factors = {
+            'Karachi': 1.2,      # Major urban center - higher costs
+            'Lahore': 1.15,      # Major urban center - higher costs
+            'Islamabad': 1.25,   # Capital city - highest costs
+            'Rawalpindi': 1.1,   # Urban center - moderate costs
+            'Faisalabad': 1.05,  # Industrial city - moderate costs
+            'Multan': 1.0,       # Regional center - baseline
+            'Peshawar': 1.0,     # Regional center - baseline
+            'Quetta': 0.95,      # Remote area - lower costs
+            'Rural': 0.8,        # Rural areas - lowest costs
+            'SEZ': 1.1,          # Special Economic Zones - moderate costs
+            'default': 1.0       # Default factor
         }
     
     def calculate_repair_cost(self, severity_score, damage_ratio, building_area_sqm, 
