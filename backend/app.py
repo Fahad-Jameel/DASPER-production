@@ -1214,6 +1214,18 @@ def assess_damage():
                     # Get regional costs and repair time from CV Model analysis
                     regional_costs = building_analysis.get('regional_costs', {})
                     repair_time_estimate = building_analysis.get('repair_time_estimate', {})
+                    logger.info(f"🔍 Debug - repair_time_estimate from building_analysis: {repair_time_estimate}")
+                    
+                    # Try to get CV Model cost estimation with image
+                    cv_cost_estimate = None
+                    if cv_analyzer and cv_analyzer.initialized and cv_analyzer.cv_model:
+                        logger.info("🤖 Getting CV Model cost estimation with image analysis")
+                        cv_cost_estimate = cv_analyzer.estimate_cost_with_cv_model(
+                            image, damage_results['severity_score'], building_type,
+                            building_area, building_height, building_volume, pin_location
+                        )
+                        if cv_cost_estimate:
+                            logger.info(f"✅ CV Model cost estimate: PKR {cv_cost_estimate.get('total_cost_pkr', 0):,.2f} ({cv_cost_estimate.get('total_cost_crore', 0):.2f} Crore)")
                     
                     # Use volume-based cost estimation with regional data
                     cost_results = volume_cost_estimator.calculate_repair_cost(
@@ -1237,7 +1249,8 @@ def assess_damage():
                         building_height_m=building_height,
                         building_volume_cubic_m=building_volume,
                         regional_costs=regional_costs,
-                        repair_time_estimate=repair_time_estimate
+                        repair_time_estimate=repair_time_estimate,
+                        cv_cost_estimate=cv_cost_estimate  # Pass CV Model cost estimate
                     )
                     
                     # Combine results

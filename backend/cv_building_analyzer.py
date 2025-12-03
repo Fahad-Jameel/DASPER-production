@@ -139,6 +139,10 @@ class CVBuildingAnalyzer:
             # Calculate confidence based on CV Model analysis quality
             confidence = self._calculate_confidence(cv_analysis, validated_height, validated_area)
             
+            # Get regional costs and repair time estimates
+            regional_costs = self._research_regional_costs(pin_location, building_type, validated_area, validated_height)
+            repair_time_estimate = self._estimate_repair_time(cv_analysis, regional_costs, building_type)
+            
             return {
                 'height_analysis': {
                     'estimated_height_m': round(float(validated_height), 2),
@@ -173,6 +177,8 @@ class CVBuildingAnalyzer:
                 },
                 'building_type': building_type,
                 'region_type': region_type,
+                'regional_costs': regional_costs,
+                'repair_time_estimate': repair_time_estimate,
                 'analysis_timestamp': datetime.utcnow().isoformat()
             }
             
@@ -502,6 +508,297 @@ Be precise and realistic in your estimates. Consider the context of {region_type
             'reference_objects': [],
             'limitations': ['Gemini API not available']
         }
+    
+    def estimate_cost_with_cv_model(self, image, severity_score, building_type, area_sqm, height_m, volume_cubic_m, pin_location):
+        """
+        Estimate repair cost using CV Model with image analysis
+        
+        Args:
+            image: PIL Image or image path
+            severity_score: Damage severity (0-1)
+            building_type: Type of building
+            area_sqm: Building area in square meters
+            height_m: Building height in meters
+            volume_cubic_m: Building volume in cubic meters
+            pin_location: Location coordinates
+            
+        Returns:
+            dict: Cost estimation results from CV Model
+        """
+        try:
+            if not self.cv_model or not self.initialized:
+                logger.warning("CV Model not available for cost estimation")
+                return None
+            
+            # Convert to PIL if needed
+            if isinstance(image, str):
+                image = Image.open(image).convert('RGB')
+            
+            # Convert image to base64
+            img_buffer = io.BytesIO()
+            image.save(img_buffer, format='JPEG', quality=95)
+            img_data = img_buffer.getvalue()
+            
+            # Calculate estimated number of floors (more conservative)
+            # Use 3.2m per floor for residential (includes slab thickness)
+            estimated_floors = max(1, round(height_m / 3.2))
+            # Cap at reasonable maximum (10 floors for residential)
+            if building_type == 'residential':
+                estimated_floors = min(estimated_floors, 10)
+            elif building_type == 'commercial':
+                estimated_floors = min(estimated_floors, 15)
+            
+            total_covered_area_sqm = area_sqm * estimated_floors
+            total_covered_area_sqft = total_covered_area_sqm * 10.764
+            
+            logger.info(f"📊 Cost calculation: {estimated_floors} floors × {area_sqm:.1f} sqm = {total_covered_area_sqm:.1f} sqm ({total_covered_area_sqft:.1f} sq ft)")
+            
+            # Create detailed cost estimation prompt
+            prompt = f"""
+You are an expert structural engineer and cost estimator specializing in disaster damage assessment for Pakistan (2024-2025 market rates).
+
+Analyze this damaged building image and provide a comprehensive cost estimation for repair/reconstruction.
+
+**Building Information:**
+- Type: {building_type}
+- Footprint Area: {area_sqm:.1f} square meters ({area_sqm * 10.764:.1f} sq ft)
+- Height: {height_m:.1f} meters
+- Estimated Floors: {estimated_floors} floors
+- **TOTAL COVERED AREA (all floors)**: {total_covered_area_sqm:.1f} sqm ({total_covered_area_sqft:.1f} sq ft)
+- Volume: {volume_cubic_m:.1f} cubic meters
+- Location: {pin_location if pin_location else 'Pakistan'}
+- Damage Severity: {severity_score * 100:.1f}% (from AI model)
+
+**CRITICAL: Calculate costs based on TOTAL COVERED AREA (all floors), NOT just footprint!**
+
+**Your Task:**
+Based on the visual evidence in the image, provide a realistic cost estimation for the Pakistani construction market (2024-2025).
+
+**For Catastrophic Damage (80-100%):**
+- This requires COMPLETE DEMOLITION + FULL RECONSTRUCTION
+- Calculate costs for the ENTIRE building (all {estimated_floors} floors)
+- Use TOTAL COVERED AREA: {total_covered_area_sqft:.1f} sq ft
+
+**Cost Components:**
+1. **Demolition & Debris Removal**: PKR 1,000 - 1,500 per sq ft of TOTAL COVERED AREA
+2. **Full Reconstruction (Grey Structure)**: PKR 4,000 - 8,000 per sq ft (residential) / PKR 6,000 - 12,000 per sq ft (commercial)
+3. **Finishing (Complete)**: PKR 4,500 - 7,000+ per sq ft
+4. **Professional Fees**: 15% of construction cost
+5. **Permits & Approvals**: 5% of construction cost
+6. **Contingency**: 10-15% for uncertainties
+
+**Market Rates (Pakistan 2024-2025):**
+- Demolition: PKR 1,000 - 1,500 per sq ft (TOTAL COVERED AREA)
+- Grey Structure: PKR 4,000 - 8,000 per sq ft (residential) / PKR 6,000 - 12,000 per sq ft (commercial)
+- Finishing: PKR 4,500 - 7,000+ per sq ft
+- For catastrophic collapse, use HIGHER end of ranges
+
+**IMPORTANT:**
+- Multiply all per-sq-ft costs by TOTAL COVERED AREA ({total_covered_area_sqft:.1f} sq ft)
+- For 100% damage, assume complete demolition and full reconstruction
+- Include all costs: demolition, reconstruction, finishing, fees, permits, contingency
+
+Respond in this exact JSON format:
+{{
+    "actual_damage_percentage": <number 0-100>,
+    "requires_demolition": <true/false>,
+    "estimated_floors": {estimated_floors},
+    "total_covered_area_sqft": {total_covered_area_sqft:.1f},
+    "cost_breakdown": {{
+        "demolition_cost_per_sqft": <number>,
+        "grey_structure_cost_per_sqft": <number>,
+        "finishing_cost_per_sqft": <number>,
+        "professional_fees_percentage": 15,
+        "permits_percentage": 5,
+        "contingency_percentage": 12
+    }},
+    "total_cost_pkr": <total cost in PKR for ENTIRE building>,
+    "total_cost_crore": <total cost in Crore>,
+    "explanation": "<detailed explanation including how you calculated for all floors>",
+    "confidence": <0-1>
+}}
+"""
+            
+            # Generate content with CV Model
+            response = self.cv_model.generate_content([
+                prompt,
+                {
+                    "mime_type": "image/jpeg",
+                    "data": img_data
+                }
+            ])
+            
+            # Parse response
+            cost_data = self._parse_cost_estimation_response(response.text)
+            logger.info(f"✅ CV Model cost estimation completed")
+            return cost_data
+            
+        except Exception as e:
+            logger.error(f"CV Model cost estimation error: {e}")
+            return None
+    
+    def _parse_cost_estimation_response(self, response_text):
+        """Parse CV Model cost estimation response"""
+        try:
+            import re
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+                data = json.loads(json_str)
+                
+                return {
+                    'actual_damage_percentage': float(data.get('actual_damage_percentage', 0)),
+                    'requires_demolition': bool(data.get('requires_demolition', False)),
+                    'cost_breakdown': data.get('cost_breakdown', {}),
+                    'total_cost_pkr': float(data.get('total_cost_pkr', 0)),
+                    'total_cost_crore': float(data.get('total_cost_crore', 0)),
+                    'explanation': data.get('explanation', ''),
+                    'confidence': float(data.get('confidence', 0.7))
+                }
+            return None
+        except Exception as e:
+            logger.error(f"Error parsing cost estimation response: {e}")
+            return None
+    
+    def _research_regional_costs(self, pin_location, building_type, area_sqm, height_m):
+        """Research regional construction costs"""
+        try:
+            if not self.cv_model:
+                return self._get_default_regional_costs(building_type)
+            
+            prompt = f"""
+Research current construction costs in Pakistan (2024-2025) for location: {pin_location}
+
+Building Type: {building_type}
+Area: {area_sqm:.1f} sqm
+Height: {height_m:.1f} m
+
+Provide current market rates in PKR per square meter for:
+1. Structural materials (cement, steel, bricks)
+2. Non-structural materials (tiles, paint, electrical, plumbing)
+3. Labor costs
+4. Equipment rental
+5. Professional fees (architects, engineers)
+
+Respond in JSON format:
+{{
+    "location": "{pin_location}",
+    "cost_breakdown": {{
+        "structural_materials": <PKR per sqm>,
+        "non_structural_materials": <PKR per sqm>,
+        "labor": <PKR per sqm>,
+        "equipment": <PKR per sqm>,
+        "professional_fees": <percentage of total>
+    }},
+    "regional_multiplier": <1.0-1.5>
+}}
+"""
+            response = self.cv_model.generate_content([prompt])
+            cost_data = self._parse_regional_cost_response(response.text)
+            logger.info(f"✅ Regional cost research completed for {pin_location}")
+            return cost_data
+        except Exception as e:
+            logger.error(f"Regional cost research error: {e}")
+            return self._get_default_regional_costs(building_type)
+    
+    def _parse_regional_cost_response(self, response_text):
+        """Parse regional cost response"""
+        try:
+            import re
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+                return json.loads(json_str)
+            return self._get_default_regional_costs('residential')
+        except Exception as e:
+            logger.error(f"Error parsing regional cost response: {e}")
+            return self._get_default_regional_costs('residential')
+    
+    def _estimate_repair_time(self, cv_analysis, regional_costs, building_type):
+        """Estimate repair time based on damage analysis"""
+        try:
+            if not self.cv_model:
+                return self._get_default_repair_time(building_type)
+            
+            condition = cv_analysis.get('condition_assessment', 'unknown')
+            prompt = f"""
+Estimate realistic repair time in days for a {building_type} building with the following condition:
+{condition}
+
+Consider:
+- Demolition time (if needed)
+- Material procurement
+- Structural repair/rebuild
+- Finishing work
+- Permits and approvals
+
+Respond in JSON:
+{{
+    "estimated_days": <number>,
+    "breakdown": {{
+        "planning_permit": <days>,
+        "demolition": <days>,
+        "material_procurement": <days>,
+        "structural_work": <days>,
+        "finishing": <days>
+    }},
+    "confidence": <0-1>
+}}
+"""
+            response = self.cv_model.generate_content([prompt])
+            time_data = self._parse_repair_time_response(response.text)
+            logger.info(f"✅ Repair time estimation completed")
+            return time_data
+        except Exception as e:
+            logger.error(f"Repair time estimation error: {e}")
+            return self._get_default_repair_time(building_type)
+    
+    def _parse_repair_time_response(self, response_text):
+        """Parse repair time response"""
+        try:
+            import re
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+                return json.loads(json_str)
+            return self._get_default_repair_time('residential')
+        except Exception as e:
+            logger.error(f"Error parsing repair time response: {e}")
+            return self._get_default_repair_time('residential')
+    
+    def _get_default_regional_costs(self, building_type):
+        """Get default regional costs"""
+        defaults = {
+            'residential': {
+                'location': 'Pakistan',
+                'cost_breakdown': {
+                    'structural_materials': 45000,
+                    'non_structural_materials': 25000,
+                    'labor': 30000,
+                    'equipment': 10000,
+                    'professional_fees': 0.15
+                },
+                'regional_multiplier': 1.0
+            }
+        }
+        return defaults.get(building_type, defaults['residential'])
+    
+    def _get_default_repair_time(self, building_type):
+        """Get default repair time"""
+        defaults = {
+            'residential': {
+                'estimated_days': 90,
+                'breakdown': {
+                    'planning_permit': 7,
+                    'demolition': 5,
+                    'material_procurement': 15,
+                    'structural_work': 40,
+                    'finishing': 23
+                },
+                'confidence': 0.7
+            }
+        }
+        return defaults.get(building_type, defaults['residential'])
     
     def _get_fallback_analysis(self, building_type, region_type):
         """Get fallback analysis when main analysis fails"""

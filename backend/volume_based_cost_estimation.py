@@ -94,7 +94,8 @@ class VolumeBasedCostEstimator:
                             building_type, regional_data, damage_types=None, 
                             confidence_score=1.0, ai_analysis=None, 
                             building_height_m=None, building_volume_cubic_m=None,
-                            regional_costs=None, repair_time_estimate=None):
+                            regional_costs=None, repair_time_estimate=None,
+                            cv_cost_estimate=None):
         """
         Calculate repair cost using volume-based methodology with area fallback
         
@@ -240,29 +241,55 @@ class VolumeBasedCostEstimator:
             
             total_cost = subtotal + contingency
             
-            # Apply realistic cost limits based on damage severity
-            severity_category = self._get_severity_category(severity_score)
-            
-            # For minimal damage (severity <= 0.25 or under 10%), cap cost at 5 lakh PKR
-            if severity_score <= 0.25 or severity_score <= 0.10:
-                max_cost_minimal = 500000  # 5 lakh PKR
-                if total_cost > max_cost_minimal:
-                    logger.info(f"🔧 Applying minimal damage cost cap: {total_cost:,.2f} PKR -> {max_cost_minimal:,.2f} PKR")
-                    total_cost = max_cost_minimal
-                    # Adjust contingency proportionally
-                    contingency = max_cost_minimal - subtotal
-                    if contingency < 0:
-                        contingency = 0
-            
-            # For moderate damage, apply reasonable limits
-            elif severity_score <= 0.5:
-                max_cost_moderate = 2000000  # 20 lakh PKR
-                if total_cost > max_cost_moderate:
-                    logger.info(f"🔧 Applying moderate damage cost cap: {total_cost:,.2f} PKR -> {max_cost_moderate:,.2f} PKR")
-                    total_cost = max_cost_moderate
-                    contingency = max_cost_moderate - subtotal
-                    if contingency < 0:
-                        contingency = 0
+            # Use CV Model cost estimate if available (more accurate) - WITH VALIDATION
+            if cv_cost_estimate and cv_cost_estimate.get('total_cost_pkr'):
+                cv_total_cost = float(cv_cost_estimate['total_cost_pkr'])
+                traditional_cost = total_cost
+                
+                logger.info(f"🤖 CV Model cost estimate: PKR {cv_total_cost:,.2f}")
+                logger.info(f"📊 Traditional cost estimate: PKR {traditional_cost:,.2f}")
+                
+                # Validate CV Model cost against reasonable ranges
+                # For catastrophic damage (80-100%), CV Model should be 1.2-2.5x traditional
+                # If CV Model is >2.5x traditional, it's likely too high (overestimating floors/area)
+                cost_ratio = cv_total_cost / traditional_cost if traditional_cost > 0 else 0
+                
+                if cost_ratio > 2.5:
+                    logger.warning(f"⚠️ CV Model cost ({cv_total_cost:,.2f}) is {cost_ratio:.1f}x traditional - too high, using blended approach")
+                    # Blend: 60% traditional + 40% CV Model (capped at 2x)
+                    blended_cost = (traditional_cost * 0.6) + (traditional_cost * 2.0 * 0.4)
+                    total_cost = blended_cost
+                    logger.info(f"🔧 Using blended cost: PKR {total_cost:,.2f} (CV was {cost_ratio:.1f}x, capped at 2x)")
+                elif cost_ratio < 0.7:
+                    logger.warning(f"⚠️ CV Model cost ({cv_total_cost:,.2f}) is {cost_ratio:.1f}x traditional - too low, using traditional")
+                    total_cost = traditional_cost
+                else:
+                    # CV Model cost is reasonable (0.7x to 2.5x traditional)
+                    total_cost = cv_total_cost
+                    logger.info(f"✅ Using CV Model cost: PKR {total_cost:,.2f} ({cost_ratio:.1f}x traditional)")
+                
+                # Use CV Model's actual damage percentage if available
+                if cv_cost_estimate.get('actual_damage_percentage'):
+                    actual_damage = cv_cost_estimate['actual_damage_percentage'] / 100.0
+                    logger.info(f"📊 CV Model actual damage: {cv_cost_estimate['actual_damage_percentage']:.1f}% (model: {severity_score*100:.1f}%)")
+                
+                # Adjust component costs proportionally based on CV Model breakdown
+                if cv_cost_estimate.get('cost_breakdown'):
+                    breakdown = cv_cost_estimate['cost_breakdown']
+                    area_sqft = building_area_sqm * 10.764
+                    
+                    # Calculate costs from CV Model breakdown
+                    if breakdown.get('demolition_cost_per_sqft'):
+                        demolition_cost = breakdown['demolition_cost_per_sqft'] * area_sqft
+                    if breakdown.get('grey_structure_cost_per_sqft'):
+                        structural_cost = breakdown['grey_structure_cost_per_sqft'] * area_sqft * 0.6
+                        non_structural_cost = breakdown['grey_structure_cost_per_sqft'] * area_sqft * 0.4
+                    if breakdown.get('finishing_cost_per_sqft'):
+                        non_structural_cost = breakdown['finishing_cost_per_sqft'] * area_sqft
+                
+                # Recalculate ranges based on CV Model confidence
+                cv_confidence = cv_cost_estimate.get('confidence', 0.7)
+                uncertainty_factor = (1.0 - cv_confidence) * 0.3  # Reduced uncertainty for CV Model
             
             # Calculate ranges
             cost_range_low = total_cost * (1 - uncertainty_factor)
