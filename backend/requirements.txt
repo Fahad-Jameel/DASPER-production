@@ -11,7 +11,7 @@ python-dotenv==1.0.0
 opencv-python==4.7.0.72
 matplotlib==3.7.1
 seaborn==0.12.2
-google-generativeai==0.1.0
+google-generativeai>=0.8.0
 reportlab==3.6.12
 textblob==0.17.1
 werkzeug==2.2.3

@@ -144,15 +144,30 @@ class JSONEncoder(json.JSONEncoder):
 
 app.json_encoder = JSONEncoder
 
+def ensure_database():
+    """Ensure database is initialized, reconnect if needed"""
+    global mongo_client, db
+    if db is None:
+        logger.warning("⚠️ Database not initialized, attempting to reconnect...")
+        return init_database()
+    return True
+
 def init_database():
     """Initialize MongoDB connection with improved error handling"""
     global mongo_client, db
     try:
         mongo_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
-        mongo_client = MongoClient(mongo_uri)
+        
+        if not mongo_uri or mongo_uri == 'mongodb://localhost:27017/':
+            logger.warning("⚠️ MONGODB_URI not set, using default localhost. This may fail in production.")
+        
+        logger.info(f"🔌 Connecting to MongoDB...")
+        logger.info(f"📍 MongoDB URI: {mongo_uri[:50]}..." if len(mongo_uri) > 50 else f"📍 MongoDB URI: {mongo_uri}")
+        
+        mongo_client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
         db = mongo_client['dasper_db']
         
-        # Test connection
+        # Test connection with timeout
         mongo_client.admin.command('ping')
         logger.info("✅ MongoDB connected successfully")
         
@@ -190,6 +205,20 @@ def init_database():
         return True
     except Exception as e:
         logger.error(f"❌ MongoDB connection failed: {e}")
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        
+        # Reset global variables on failure
+        mongo_client = None
+        db = None
+        
+        logger.error("💡 Please check:")
+        logger.error("   1. MONGODB_URI environment variable is set correctly")
+        logger.error("   2. MongoDB server is running and accessible")
+        logger.error("   3. Network connectivity to MongoDB")
+        logger.error("   4. MongoDB credentials are correct")
+        
         return False
 
 def init_regional_indices():
@@ -374,6 +403,10 @@ def generate_enhanced_heatmap(image_path, assessment_result):
 def register():
     """Register new user"""
     try:
+        # Ensure database is initialized
+        if not ensure_database():
+            return jsonify({'error': 'Database connection failed. Please contact administrator.'}), 500
+        
         data = request.get_json()
         
         required_fields = ['email', 'password', 'full_name']
@@ -436,6 +469,10 @@ def register():
 def login():
     """Login user with improved password hash compatibility"""
     try:
+        # Ensure database is initialized
+        if not ensure_database():
+            return jsonify({'error': 'Database connection failed. Please contact administrator.'}), 500
+        
         data = request.get_json()
         
         email = data.get('email', '').lower()

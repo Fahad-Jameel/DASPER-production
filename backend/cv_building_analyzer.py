@@ -21,6 +21,7 @@ class CVBuildingAnalyzer:
     
     def __init__(self):
         self.cv_model = None
+        self.quota_exceeded = False
         self.initialized = self._initialize_cv_model()
         
         # Building type defaults for validation
@@ -189,6 +190,11 @@ class CVBuildingAnalyzer:
     def _analyze_with_cv_vision(self, image, building_type, region_type, pin_location):
         """Analyze building using CV Model"""
         try:
+            # Check if quota is exceeded
+            if self.quota_exceeded:
+                logger.warning("⚠️ Gemini API quota exceeded. Skipping API call, using fallback.")
+                return self._get_fallback_gemini_analysis()
+            
             logger.info(f"🔍 CV Model status: initialized={self.initialized}, model={self.cv_model is not None}")
             if not self.cv_model:
                 logger.warning("⚠️ CV model not available, using fallback")
@@ -218,6 +224,14 @@ class CVBuildingAnalyzer:
             return cv_analysis
             
         except Exception as e:
+            error_str = str(e)
+            # Check for quota exceeded error (429)
+            if '429' in error_str or 'quota' in error_str.lower() or 'rate.limit' in error_str.lower():
+                logger.warning("⚠️ Gemini API quota exceeded. Using fallback analysis.")
+                logger.warning(f"⚠️ Quota error details: {error_str[:200]}")
+                # Set flag to avoid further API calls
+                self.quota_exceeded = True
+            else:
             logger.error(f"CV Model API error: {e}")
             return self._get_fallback_gemini_analysis()
     
@@ -526,6 +540,11 @@ Be precise and realistic in your estimates. Consider the context of {region_type
             dict: Cost estimation results from CV Model
         """
         try:
+            # Check if quota is exceeded
+            if self.quota_exceeded:
+                logger.warning("⚠️ Gemini API quota exceeded. Skipping cost estimation API call, using traditional method.")
+                return None
+            
             if not self.cv_model or not self.initialized:
                 logger.warning("CV Model not available for cost estimation")
                 return None
@@ -634,7 +653,13 @@ Respond in this exact JSON format:
             return cost_data
             
         except Exception as e:
-            logger.error(f"CV Model cost estimation error: {e}")
+            error_str = str(e)
+            # Check for quota exceeded error (429)
+            if '429' in error_str or 'quota' in error_str.lower() or 'rate.limit' in error_str.lower():
+                logger.warning("⚠️ Gemini API quota exceeded for cost estimation. Using traditional method.")
+                self.quota_exceeded = True
+            else:
+                logger.error(f"CV Model cost estimation error: {e}")
             return None
     
     def _parse_cost_estimation_response(self, response_text):
@@ -663,6 +688,11 @@ Respond in this exact JSON format:
     def _research_regional_costs(self, pin_location, building_type, area_sqm, height_m):
         """Research regional construction costs"""
         try:
+            # Check if quota is exceeded
+            if self.quota_exceeded:
+                logger.warning("⚠️ Gemini API quota exceeded. Using default regional costs.")
+                return self._get_default_regional_costs(building_type)
+            
             if not self.cv_model:
                 return self._get_default_regional_costs(building_type)
             
@@ -698,7 +728,13 @@ Respond in JSON format:
             logger.info(f"✅ Regional cost research completed for {pin_location}")
             return cost_data
         except Exception as e:
-            logger.error(f"Regional cost research error: {e}")
+            error_str = str(e)
+            # Check for quota exceeded error (429)
+            if '429' in error_str or 'quota' in error_str.lower() or 'rate.limit' in error_str.lower():
+                logger.warning("⚠️ Gemini API quota exceeded for regional cost research. Using defaults.")
+                self.quota_exceeded = True
+            else:
+                logger.error(f"Regional cost research error: {e}")
             return self._get_default_regional_costs(building_type)
     
     def _parse_regional_cost_response(self, response_text):
@@ -717,6 +753,11 @@ Respond in JSON format:
     def _estimate_repair_time(self, cv_analysis, regional_costs, building_type):
         """Estimate repair time based on damage analysis"""
         try:
+            # Check if quota is exceeded
+            if self.quota_exceeded:
+                logger.warning("⚠️ Gemini API quota exceeded. Using default repair time.")
+                return self._get_default_repair_time(building_type)
+            
             if not self.cv_model:
                 return self._get_default_repair_time(building_type)
             
@@ -750,7 +791,13 @@ Respond in JSON:
             logger.info(f"✅ Repair time estimation completed")
             return time_data
         except Exception as e:
-            logger.error(f"Repair time estimation error: {e}")
+            error_str = str(e)
+            # Check for quota exceeded error (429)
+            if '429' in error_str or 'quota' in error_str.lower() or 'rate.limit' in error_str.lower():
+                logger.warning("⚠️ Gemini API quota exceeded for repair time estimation. Using defaults.")
+                self.quota_exceeded = True
+            else:
+                logger.error(f"Repair time estimation error: {e}")
             return self._get_default_repair_time(building_type)
     
     def _parse_repair_time_response(self, response_text):
