@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Documentation
+*.md
+!README.md
+
+# Backup files
+*.backup
+*_backup_*
+
+# Test files
+test_*.py
+*_test.py
+
+# Scripts (keep only necessary ones)
+check_backend_status.py
+create_regional_cost_data.py
+upload_to_mongodb.py
+verify_regional_data.py
+migrate_passwords*.py
+debug_*.py
+simple_test_server.py
+test_*.py
+
+# Reports and results (will be created at runtime)
+reports/*.pdf
+results/*.jpeg
+results/*.png
+uploads/*
+
+# Environment files (will be passed as env vars)
+.env
+.env.local
+
+# Git
+.git/
+.gitignore

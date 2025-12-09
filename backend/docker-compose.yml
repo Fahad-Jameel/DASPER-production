@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  dasper-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dasper-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=mongodb+srv://dasper_user:dasper%40production%402021@dasper.wt1bmvf.mongodb.net/?retryWrites=true&w=majority&appName=dasper
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-this}
+      - FLASK_ENV=production
+    volumes:
+      - ./uploads:/app/uploads
+      - ./results:/app/results
+      - ./reports:/app/reports
+    restart: unless-stopped
+    networks:
+      - dasper-network
+
+networks:
+  dasper-network:
+    driver: bridge
