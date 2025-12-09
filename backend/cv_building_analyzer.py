@@ -232,7 +232,7 @@ class CVBuildingAnalyzer:
                 # Set flag to avoid further API calls
                 self.quota_exceeded = True
             else:
-            logger.error(f"CV Model API error: {e}")
+                logger.error(f"CV Model API error: {e}")
             return self._get_fallback_gemini_analysis()
     
     def _create_analysis_prompt(self, building_type, region_type, pin_location):
