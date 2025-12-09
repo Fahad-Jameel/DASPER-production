@@ -325,23 +325,40 @@ class DashboardService {
     for (const baseUrl of urlsToTest) {
       try {
         console.log(`Testing connectivity to: ${baseUrl}`);
+        
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
         const response = await fetch(`${baseUrl}/api/health`, {
           method: 'GET',
+          signal: controller.signal,
         });
         
+        clearTimeout(timeoutId);
+        
         if (response.ok) {
+          const data = await response.json();
           console.log(`✅ ${baseUrl} is accessible`);
+          console.log(`Backend status: ${data.status || 'ok'}`);
           return { success: true, url: baseUrl };
         } else {
           console.log(`❌ ${baseUrl} returned status: ${response.status}`);
         }
       } catch (error) {
-        console.log(`❌ ${baseUrl} failed: ${error.message}`);
+        if (error.name === 'AbortError') {
+          console.log(`❌ ${baseUrl} timed out (server not responding)`);
+        } else {
+          console.log(`❌ ${baseUrl} failed: ${error.message}`);
+        }
       }
     }
     
     console.log('❌ No backend URLs are accessible');
-    return { success: false, error: 'No backend URLs are accessible' };
+    return { 
+      success: false, 
+      error: 'Backend server is not accessible. Please ensure the backend server is running at ' + ENV.API_BASE_URL 
+    };
   }
 
   // Test basic network connectivity
@@ -349,21 +366,29 @@ class DashboardService {
     console.log('=== TESTING BASIC NETWORK CONNECTIVITY ===');
     
     try {
-      // Test with a simple public API
+      // Test with a simple public API (with timeout)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
       const response = await fetch('https://httpbin.org/get', {
         method: 'GET',
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         console.log('✅ Basic network connectivity is working');
         return { success: true };
       } else {
-        console.log('❌ Basic network test failed with status:', response.status);
-        return { success: false, error: 'Network test failed' };
+        // Don't fail on 503 - httpbin might be down, but network could still work
+        console.log(`⚠️ Network test returned status: ${response.status} (continuing anyway)`);
+        return { success: true }; // Continue anyway - backend test will catch real issues
       }
     } catch (error) {
-      console.log('❌ Basic network test failed:', error.message);
-      return { success: false, error: error.message };
+      // Network test failure is not critical - backend test will catch real issues
+      console.log(`⚠️ Network test failed: ${error.message} (continuing anyway)`);
+      return { success: true }; // Continue anyway - backend test will catch real issues
     }
   }
 

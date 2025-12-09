@@ -72,6 +72,7 @@ try:
     from enhanced_building_analyzer import EnhancedBuildingAnalyzer
     from cv_building_analyzer import CVBuildingAnalyzer
     from volume_based_cost_estimation import VolumeBasedCostEstimator
+    from gemini_report_generator import GeminiReportGenerator
 except ImportError as e:
     print(f"Warning: Could not import modules: {e}")
     DamageAssessmentPipeline = None
@@ -80,6 +81,7 @@ except ImportError as e:
     EnhancedBuildingAnalyzer = None
     CVBuildingAnalyzer = None
     VolumeBasedCostEstimator = None
+    GeminiReportGenerator = None
 
 app = Flask(__name__)
 CORS(app, origins=['*'], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
@@ -1496,7 +1498,7 @@ def get_public_assessments():
 @app.route('/api/reports/generate', methods=['POST'])
 @jwt_required()
 def generate_pdf_report():
-    """Generate PDF report for assessment"""
+    """Generate AI-powered PDF report using Gemini"""
     try:
         user_id = get_jwt_identity()
         data = request.get_json()
@@ -1514,8 +1516,30 @@ def generate_pdf_report():
         if str(assessment['user_id']) != user_id and not assessment.get('is_public', False):
             return jsonify({'error': 'Access denied'}), 403
         
-        # Generate PDF
-        pdf_path = generate_assessment_pdf(assessment)
+        logger.info(f"🤖 Generating AI report for assessment {assessment_id}")
+        
+        # Initialize Gemini report generator
+        if GeminiReportGenerator:
+            report_generator = GeminiReportGenerator()
+            
+            # Generate AI report text
+            report_text = report_generator.generate_ai_report(assessment)
+            
+            # Create PDF filename
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            pdf_filename = f"dasper_report_{assessment_id}_{timestamp}.pdf"
+            pdf_path = os.path.join(app.config['REPORTS_FOLDER'], pdf_filename)
+            
+            # Convert text to PDF
+            pdf_path = report_generator.generate_pdf_from_text(
+                report_text, 
+                assessment_id, 
+                pdf_path
+            )
+        else:
+            # Fallback to old method if Gemini not available
+            logger.warning("⚠️ Gemini not available, using fallback PDF generation")
+            pdf_path = generate_assessment_pdf(assessment)
         
         # Save report record
         report_data = {
@@ -1523,20 +1547,25 @@ def generate_pdf_report():
             'assessment_id': ObjectId(assessment_id),
             'pdf_path': pdf_path,
             'created_at': datetime.utcnow(),
-            'file_size': os.path.getsize(pdf_path) if os.path.exists(pdf_path) else 0
+            'file_size': os.path.getsize(pdf_path) if os.path.exists(pdf_path) else 0,
+            'generated_by': 'Gemini AI' if GeminiReportGenerator else 'Standard'
         }
         
         result = db.reports.insert_one(report_data)
         report_id = str(result.inserted_id)
         
+        logger.info(f"✅ Report generated successfully: {report_id}")
+        
         return jsonify({
             'report_id': report_id,
             'download_url': f'/api/reports/download/{report_id}',
-            'message': 'Report generated successfully'
+            'message': 'AI-generated report created successfully'
         })
         
     except Exception as e:
         logger.error(f"Report generation error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 def generate_assessment_pdf(assessment):
