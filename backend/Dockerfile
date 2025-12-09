@@ -1,7 +1,7 @@
 # DASPER Backend Dockerfile
 # Multi-stage build for optimized image size
 
-FROM python:3.9-slim as base
+FROM python:3.9-slim AS base
 
 # Set working directory
 WORKDIR /app
@@ -9,7 +9,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
